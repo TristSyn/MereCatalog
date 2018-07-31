@@ -124,21 +124,16 @@ For reference, the SP above is something like the following (with the last SELEC
 
 ``` SQL 
 CREATE PROCEDURE [dbo].[Order_ByID]
-		@OrderID int
-	AS
-	BEGIN
-		-- SET NOCOUNT ON added to prevent extra result sets from
-		-- interfering with SELECT statements.
-		SET NOCOUNT ON;
-
-		-- Insert statements for procedure here
-		SELECT * FROM [Orders] WHERE OrderID = @OrderID
-		SELECT * FROM Customers c JOIN [Orders] o ON o.CustomerID = c.CustomerID WHERE o.OrderID = @OrderID
-		SELECT * FROM [Order Details] od WHERE od.OrderID = @OrderID
-		SELECT * FROM Products p WHERE ProductID IN (SELECT ProductID FROM [Order Details] od WHERE od.OrderID = @OrderID)
-		SELECT * FROM Suppliers s WHERE SupplierID IN (SELECT SupplierID FROM Products p WHERE ProductID IN (SELECT ProductID FROM [Order Details] od WHERE od.OrderID = @OrderID))
-		SELECT * FROM Categories c WHERE CategoryID IN (SELECT CategoryID FROM Products p WHERE ProductID IN (SELECT ProductID FROM [Order Details] od WHERE od.OrderID = @OrderID))
-	END
+	@OrderID int
+AS
+BEGIN
+	SELECT * FROM [Orders] WHERE OrderID = @OrderID
+	SELECT * FROM Customers c JOIN [Orders] o ON o.CustomerID = c.CustomerID WHERE o.OrderID = @OrderID
+	SELECT * FROM [Order Details] od WHERE od.OrderID = @OrderID
+	SELECT * FROM Products p WHERE ProductID IN (SELECT ProductID FROM [Order Details] od WHERE od.OrderID = @OrderID)
+	SELECT * FROM Suppliers s WHERE SupplierID IN (SELECT SupplierID FROM Products p WHERE ProductID IN (SELECT ProductID FROM [Order Details] od WHERE od.OrderID = @OrderID))
+	SELECT * FROM Categories c WHERE CategoryID IN (SELECT CategoryID FROM Products p WHERE ProductID IN (SELECT ProductID FROM [Order Details] od WHERE od.OrderID = @OrderID))
+END
 ```
 
 ### Attributes
@@ -147,12 +142,12 @@ The Order class example above demonstrates the DBTable attribute but there's als
 - the ID Field if not obvious/derivable
 ``` C#
 [DBProperty(IDField=true)]
-public long StrangeIDFieldName {get; set; }
+public long StrangeIDFieldName { get; set; }
 ```
 - Exclude attribute for properties that you want ignored
 ``` C#
 [DBProperty(Exclude=true)]
-public long ExcludeMe {get; set; }
+public long ExcludeMe { get; set; }
 ```
 - Defining the foreign relationship key if not obvious/derivable
 ``` C#
