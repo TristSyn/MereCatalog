@@ -13,8 +13,8 @@ namespace MereCatalog {
 
 		protected static MereCataloger MereCataloger { get { return MereCataloger.Instance; } }
 
-        public static T ByID(long id) {
-			return MereCataloger.FindByID<T>(id);
+		public static T ByID(long id, bool initialLoad = true, bool recursiveLoad = false) {
+			return MereCataloger.FindByID<T>(initialLoad, recursiveLoad, id);
         }
 
         public static void Save(T target) {

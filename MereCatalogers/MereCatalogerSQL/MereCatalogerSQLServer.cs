@@ -24,13 +24,13 @@ namespace MereCatalog
         protected override IDbConnection ConnectionNew() { return new SqlConnection(ConfigurationManager.ConnectionStrings[ConnectionStringName].ConnectionString); }
 
         public override IDbDataParameter ParameterNew(string name, object value) { return new SqlParameter(name, value); }
-        
-		public ResultSet<T[]> LoadFromSP<T>(string sp, Type[] types, params object[] parameters) where T : class {
+
+		public ResultSet<T[]> LoadFromSP<T>(string sp, Type[] types, bool recursiveLoad, params object[] parameters) where T : class {
 
 			Catalogable p = Catalogable.For(typeof(T));
             IDbCommand cmd = findallcmd(p, CommandType.StoredProcedure, ParameterList(parameters));
 			cmd.CommandText = sp;
-			return Load<T>(types, cmd, false);
+			return Load<T>(types, cmd, recursiveLoad);
 		}
     }
 }
