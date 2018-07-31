@@ -27,7 +27,7 @@ This solution is largely untested and is provided "as is". It was more of an exe
 
 Setup DAL classes. Here's a partial implementation of a Northwind table.
 
-```
+``` C#
 [DBTable(TableName="Orders")]
 public class Order
 {
@@ -64,7 +64,7 @@ When a read query is executed, the various properties would be populated and, by
 
 A basic BLL is available to provide some basic CRUD operations and can easily be extended. This provides static ByID, Save and Delete methods.  
 
-```
+``` C#
 public class Orders : BLLSQLServer<Order>
 {
 	...
@@ -75,7 +75,7 @@ public class Orders : BLLSQLServer<Order>
 
 From the above BLL example (with no added methods), the following is possible:
 
-```
+``` C#
 Order order = Orders.ByID(10255);
 ```
 
@@ -89,7 +89,7 @@ Note that one DBCommand is executing three statements.
 
 At this point, all Order properties are accessible, e.g.
 
-```
+``` C#
 DateTime dt = Order.OrderDate;
 string custName = Order.Customer.CompanyName;
 ```
@@ -98,7 +98,7 @@ However no associated domain objects on the Customer or OrderDetails properties 
 
 To automatically load these, you must indicate that you wish load recursively any associated objects that are found. This can be quite dangerous as it could end up generating and executing MANY DBCommands
 
-```
+``` C#
 Order order = Orders.ByID(10255, recursiveLoad: true);
 ```
 
@@ -108,7 +108,7 @@ This further loads the Product, Supplier and Category details as needed. If an I
 
 If wishing to optimize this (and using SQL Server), you can use a crafted Stored Procedure to load this full record in a way that doesn't require further DBCommands to execute, e.g. By adding a method to the Orders BLL object (shown here without error handling):
 
-```
+``` C#
 public static Order ByIDSP(long id) {
 	var result = MereCataloger.LoadFromSP<Order>("Order_ByID", new[] { typeof(Order), typeof(Customer), typeof(OrderDetail), typeof(Product), typeof(Supplier), typeof(Category) }, true, "OrderID", id);
 	return result.Result[0];
@@ -116,17 +116,54 @@ public static Order ByIDSP(long id) {
 ```
 [![Stored Proc Full](./images/StoredProcFull.PNG)](./images/StoredProcFull.PNG)
 
-The type array indicates the order of types to be returned as result sets from the Stored Procedure. And bool indicates whether to recursively load associated domain objects that were missed by the stored procedure. Here's what the Profile would look like if the Stored Procedure didn't have the Categories load:
+The type array indicates the order of types to be returned as result sets from the Stored Procedure. And the bool indicates whether to recursively load associated domain objects that were missed by the stored procedure. Here's what the Profile would look like if the Stored Procedure didn't have the Categories load and ther recursion was set to true:
 
 [![Stored Proc Incomplete](./images/StoredProcIncomplete.PNG)](./images/StoredProcIncomplete.PNG)
 
+For reference, the SP above is something like the following (with the last SELECT optional commented out to achieve the discussion above):
 
-TODO: talk about using SPs
+``` SQL 
+CREATE PROCEDURE [dbo].[Order_ByID]
+		@OrderID int
+	AS
+	BEGIN
+		-- SET NOCOUNT ON added to prevent extra result sets from
+		-- interfering with SELECT statements.
+		SET NOCOUNT ON;
 
+		-- Insert statements for procedure here
+		SELECT * FROM [Orders] WHERE OrderID = @OrderID
+		SELECT * FROM Customers c JOIN [Orders] o ON o.CustomerID = c.CustomerID WHERE o.OrderID = @OrderID
+		SELECT * FROM [Order Details] od WHERE od.OrderID = @OrderID
+		SELECT * FROM Products p WHERE ProductID IN (SELECT ProductID FROM [Order Details] od WHERE od.OrderID = @OrderID)
+		SELECT * FROM Suppliers s WHERE SupplierID IN (SELECT SupplierID FROM Products p WHERE ProductID IN (SELECT ProductID FROM [Order Details] od WHERE od.OrderID = @OrderID))
+		SELECT * FROM Categories c WHERE CategoryID IN (SELECT CategoryID FROM Products p WHERE ProductID IN (SELECT ProductID FROM [Order Details] od WHERE od.OrderID = @OrderID))
+	END
+```
+
+### Attributes
+
+The Order class example above demonstrates the DBTable attribute but there's also a DBProperty attribute useful for specifying:
+- the ID Field if not obvious/derivable
+``` C#
+[DBProperty(IDField=true)]
+public long StrangeIDFieldName {get; set; }
+```
+- Exclude attribute for properties that you want ignored
+``` C#
+[DBProperty(Exclude=true)]
+public long ExcludeMe {get; set; }
+```
+- Defining the foreign relationship key if not obvious/derivable
+``` C#
+[DBProperty(KeyID="ParentID")]
+public TreeNode ParentTreeNode { get; set; }
+```
 
 ## Future work
 
 - BLL assumes primary key is long data type.
+- robust error handling
 - uses minvalues for DBNull mapping. Nullable values might be neater.
 - more abstracted database connectivity. It's defaulting to SQL server.
 - Lazy loading optional for associated domain objects

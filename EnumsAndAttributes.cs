@@ -11,7 +11,6 @@ namespace MereCatalog
 	public class DBTableAttribute : Attribute
     {
         public string TableName;
-        public bool CacheAll;
     }
 
 	[AttributeUsage(AttributeTargets.Property)]
