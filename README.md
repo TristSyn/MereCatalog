@@ -164,3 +164,4 @@ public TreeNode ParentTreeNode { get; set; }
 - Lazy loading optional for associated domain objects
 - Linq and/or Lambda style querying
 - better sql querying abilities (<, >, <=, >=, like, etc)
+- Caching of entire tables, or results for certain parameters. Probably defined through the DBTable attribute.
