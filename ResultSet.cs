@@ -32,6 +32,8 @@ namespace MereCatalog
 
         public void Add(object value)
         {
+			if (value == null)
+				return;
 			PropertyInfoEx tEx = PropertyInfoEx.For(value);
 			Catalogable pt = Catalogable.For(tEx.ElementType);
             if (tEx.IsListOrArray) {
@@ -71,9 +73,8 @@ namespace MereCatalog
 				PropertyInfoEx tEx = PropertyInfoEx.ForType(property.PropertyType);
                 if (property.GetValue(item, null) != null)
                     continue;
-
+				Catalogable pt = Catalogable.For(tEx.ElementType);
                 if (tEx.IsListOrArray) {
-					Catalogable pt = Catalogable.For(tEx.ElementType);
                     object[] result = null;
 					string KeyID = t.HasPropertyAttribute(property) ? t.PropertyAttribute(property).KeyID : t.Type.Name + "ID";
 
@@ -85,9 +86,8 @@ namespace MereCatalog
                     
                     //if none found but recursiveLoad is allowed, manually get the results
                     if ((result == null || ((IList)result).Count == 0) && recursiveLoad) {
-                        var mi = p._FindMethod(tEx.ElementType);
-                        result = (object[])mi.Invoke(p, new object[] { false, false, new object[] { KeyID, itemID } });
-                        Add(result);
+						result = (object[])p._FindMethod(tEx.ElementType).Invoke(p, new object[] { false, false, new object[] { KeyID, itemID } });
+						Add(result);
                     }
 
                     if (result != null) {
@@ -104,7 +104,8 @@ namespace MereCatalog
                     }
                 } else { //singular objects
                     object result = null;
-
+					if (pt.IDProperty == null) //possibly because it's not been "excluded"
+						continue;
                     string KeyID = t.HasPropertyAttribute(property) ? t.PropertyAttribute(property).KeyID : tEx.Type.Name + "ID";
                     object id = t.ColumnValue(item, KeyID);
                     //if in the results then use, else load in using Find method on the relatedBusinessObject
@@ -112,7 +113,7 @@ namespace MereCatalog
                         result = results[tEx.Type.FullName][id];
                     else if (recursiveLoad) { //if none found but recursiveLoad is allowed, manually get the results
                         result = p._FindByIDMethod(tEx.Type).Invoke(p, new object[] { false, false, id });
-                        Add(result);
+						Add(result);
                     }
                     if (result != null)
                         property.SetValue(item, result, null);

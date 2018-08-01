@@ -9,19 +9,19 @@ namespace MereCatalog {
 	/// A base class for a very simple Business Logic Layer
 	/// </summary>
 	/// <typeparam name="T"></typeparam>
-    public abstract class BLLBase<T> where T : class {
+	public abstract class BLLBase<C, idType> where C : class {
 
 		protected static MereCataloger MereCataloger { get { return MereCataloger.Instance; } }
 
-		public static T ByID(long id, bool initialLoad = true, bool recursiveLoad = false) {
-			return MereCataloger.FindByID<T>(initialLoad, recursiveLoad, id);
+		public static C ByID(idType id, bool initialLoad = true, bool recursiveLoad = false) {
+			return MereCataloger.FindByID<C>(initialLoad, recursiveLoad, id);
         }
 
-        public static void Save(T target) {
+        public static void Save(C target) {
 			MereCataloger.Save(target);
         }
 
-        public static void Delete(T target) {
+        public static void Delete(C target) {
 			MereCataloger.Delete(target);
         }
     }
@@ -30,7 +30,7 @@ namespace MereCatalog {
 	/// A base class for a very simple SQL Server Business Logic Layer
 	/// </summary>
 	/// <typeparam name="T"></typeparam>
-    public abstract class BLLSQLServer<T> : BLLBase<T> where T : class {
+	public abstract class BLLSQLServer<C, idType> : BLLBase<C, idType> where C : class {
 
 		private static MereCatalogerSQLServer mereCataloger;
 		protected new static MereCatalogerSQLServer MereCataloger {

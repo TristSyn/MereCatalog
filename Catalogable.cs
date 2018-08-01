@@ -52,8 +52,8 @@ namespace MereCatalog
 			get {
 				if (columns == null)
                     columns = 
-                        All.Where(p => 
-                                (p.PropertyType.IsPrimitive || AllowedNonPrimitives.Contains(p.PropertyType))
+                        All.Where(p =>
+								(p.PropertyType.IsPrimitive || AllowedNonPrimitives.Contains(p.PropertyType) || IsAllowedNullable(p.PropertyType))
 								&& p.CanWrite
                                 //&& (!HasPropertyAttribute(p) || !PropertyAttribute(p).Exclude)
 								&& !(HasPropertyAttribute(p) && PropertyAttribute(p).Exclude)
@@ -62,6 +62,11 @@ namespace MereCatalog
                 return columns;
 			}
         }
+
+		private bool IsAllowedNullable(Type t) {
+			Type nt = Nullable.GetUnderlyingType(t);
+			return nt != null && (nt.IsPrimitive || AllowedNonPrimitives.Contains(nt));
+		}
 
         protected PropertyInfo ColumnByName(string name) { return Columns.FirstOrDefault(c => c.Name == name); }
 		protected PropertyInfo PropertyByName(string name) { return All.FirstOrDefault(f => f.Name == name); }

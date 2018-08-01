@@ -157,9 +157,12 @@ public TreeNode ParentTreeNode { get; set; }
 
 ## Future work
 
-- BLL assumes primary key is long data type.
+- ~~BLL assumes primary key is long data type.~~
+  - primary key type is now a type parameter on the BLLBase class
 - robust error handling
+  - ~~Crashes when an unknown property cannot successfully be retrieved from the data source~~
 - uses minvalues for DBNull mapping. Nullable values might be neater.
+  - added initial support for Nullable values.
 - more abstracted database connectivity. It's defaulting to SQL server.
 - Lazy loading optional for associated domain objects
 - Linq and/or Lambda style querying

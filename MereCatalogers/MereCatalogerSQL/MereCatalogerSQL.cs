@@ -21,11 +21,13 @@ namespace MereCatalog {
 			Catalogable p = Catalogable.For(typeof(T));
 			IDbDataParameter[] pl = ParameterList(parameters);
 			IDbCommand cmd = findallcmd(p, CommandType.Text, pl);
+			ResultSet<T[]> result;
 			if (initialLoad) {
 				Type[] types = Fullify(cmd, p, pl);
-				return Load<T>(types, cmd, recursiveLoad).Result;
+				result = Load<T>(types, cmd, recursiveLoad);
 			} else
-				return Load<T>(new Type[] { typeof(T) }, cmd, recursiveLoad).Result;
+				result = Load<T>(new Type[] { typeof(T) }, cmd, recursiveLoad);
+			return result != null ? result.Result : null;
 		}
 
 		public override void Save(object target, bool isNew) {
@@ -84,8 +86,8 @@ namespace MereCatalog {
 				PropertyInfoEx tEx = PropertyInfoEx.ForType(property.PropertyType);
 				Catalogable pt = Catalogable.For(tEx.ElementType);
 				string KeyID = p.HasPropertyAttribute(property) ? p.PropertyAttribute(property).KeyID : tEx.ElementType.Name + "ID";
-				//if (!tEx.IsListOrArray && pt.IDProperty == null)
-				//	continue;
+				if (!tEx.IsListOrArray && pt.IDProperty == null)
+					continue;
 				string qry = string.Format(";\r\nSELECT {0} FROM [{1}] WHERE {2} IN (SELECT {3} FROM [{4}] {5})"
 					, string.Join(", ", pt.Columns.Select(c => c.Name))
 					, pt.TableName
@@ -136,13 +138,15 @@ namespace MereCatalog {
 							else
 								rs.Add(results.ToArray(pt.Type));
 							reader.NextResult();
-						} catch { } //no error handling for now
+						}
+						catch (Exception ex) { } //no error handling for now
 						i++;
 					}
 					connection.Close();
 				}
 				rs.ProcessQueue(this, recursiveLoad);
-			} catch { }
+			} 
+			catch (Exception ex) { }
 			
 			return rs;
 		}
@@ -163,9 +167,10 @@ namespace MereCatalog {
 		/// <param name="property"></param>
 		/// <param name="item"></param>
 		/// <returns></returns>
-		protected object GetPropertyValue(PropertyInfo property, object item) {
+		protected object GetParameterValue(PropertyInfo property, object item) {
 			object value = property.GetValue(item, null);
 			Type t = property.GetType();
+
 			switch (property.PropertyType.Name) {
 				case "Int32":
 					if ((int)value == int.MinValue)
@@ -184,6 +189,7 @@ namespace MereCatalog {
 						value = DBNull.Value;
 					break;
 			}
+			
 			return value ?? DBNull.Value;
 		}
 
@@ -239,7 +245,7 @@ namespace MereCatalog {
 			foreach (var col in schema.Columns.Where(col => col.Name != schema.IDProperty.Name)) {
 				fieldnames += string.Format("{0}, ", col.Name);
 				paramnames += string.Format("@{0}, ", col.Name);
-				cmd.Parameters.Add(ParameterNew(col.Name, GetPropertyValue(col, item)));
+				cmd.Parameters.Add(ParameterNew(col.Name, GetParameterValue(col, item)));
 			}
 			cmd.CommandText = string.Format("INSERT INTO [{0}]({1}) OUTPUT Inserted.[{2}] VALUES ({3}); ", schema.TableName, fieldnames.TrimEnd(',', ' '), schema.IDProperty.Name, paramnames.TrimEnd(',', ' '));
 			return cmd;
@@ -250,7 +256,7 @@ namespace MereCatalog {
 			string fields = "";
 			foreach (var col in schema.Columns.Where(col => col.Name != schema.IDProperty.Name)) {
 				fields += string.Format("{0}=@{1}, ", col.Name, col.Name);
-				cmd.Parameters.Add(ParameterNew(col.Name, GetPropertyValue(col, item)));
+				cmd.Parameters.Add(ParameterNew(col.Name, GetParameterValue(col, item)));
 			}
 			cmd.Parameters.Add(ParameterNew(schema.IDProperty.Name, schema.ID(item)));
 			cmd.CommandText = string.Format("UPDATE [{0}] SET {1} WHERE {2}=@{3}", schema.TableName, fields.TrimEnd(',', ' '), schema.IDProperty.Name, schema.IDProperty.Name);

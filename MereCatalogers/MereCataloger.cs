@@ -34,7 +34,7 @@ namespace MereCatalog
         public virtual T FindByID<T>(bool initialLoad, bool recursiveLoad, object id) where T : class {
 			Catalogable p = Catalogable.For(typeof(T));
             T[] results = Find<T>(initialLoad, recursiveLoad, p.IDProperty.Name, id);
-            return results.Length == 1 ? results[0] : null;
+			return results != null && results.Length == 1 ? results[0] : null;
         }
 
 		public void Save(object target) {
@@ -57,7 +57,8 @@ namespace MereCatalog
                 object fieldValue = valueExtractor(p.Name);
                 if (Convert.IsDBNull(fieldValue)) // data in database is null, so do not set the value of the property
                     continue;
-                p.SetValue(item, p.PropertyType == fieldValue.GetType() ? fieldValue : Convert.ChangeType(fieldValue, p.PropertyType), null);
+				bool rightType = (p.PropertyType == fieldValue.GetType()) || (Nullable.GetUnderlyingType(p.PropertyType) == fieldValue.GetType());
+				p.SetValue(item, rightType ? fieldValue : Convert.ChangeType(fieldValue, p.PropertyType), null);
             }
         }
 
