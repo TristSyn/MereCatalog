@@ -65,7 +65,7 @@ When a read query is executed, the various properties would be populated and, by
 A basic BLL is available to provide some basic CRUD operations and can easily be extended. This provides static ByID, Save and Delete methods.  
 
 ``` C#
-public class Orders : BLLSQLServer<Order>
+public class Orders : BLLSQLServer<Order, long>
 {
 	...
 }
