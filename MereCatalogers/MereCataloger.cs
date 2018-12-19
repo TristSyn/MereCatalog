@@ -34,7 +34,9 @@ namespace MereCatalog
         public virtual T FindByID<T>(bool initialLoad, bool recursiveLoad, object id) where T : class {
 			Catalogable p = Catalogable.For(typeof(T));
             T[] results = Find<T>(initialLoad, recursiveLoad, p.IDProperty.Name, id);
-			return results != null && results.Length == 1 ? results[0] : null;
+			if (results == null)
+				return null;
+			return results.Length == 1 ? results[0] : results.FirstOrDefault(obj => p.ID(obj).Equals(id));
         }
 
 		public void Save(object target) {

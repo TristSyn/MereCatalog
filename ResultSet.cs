@@ -78,10 +78,13 @@ namespace MereCatalog
                     object[] result = null;
 					string KeyID = t.HasPropertyAttribute(property) ? t.PropertyAttribute(property).KeyID : t.Type.Name + "ID";
 
-                    //if in the results then use, else load in using Find method on the relatedBusinessObject
-                    if (results.ContainsKey(tEx.ElementType.FullName))
+					if (pt.Cached && pt.Cache != null) {
+						result = pt.Cache.Where(obj => pt.ColumnValue(obj, KeyID).Equals(itemID)).ToArray();
+					}
+					//if in the results then use, else load in using Find method on the relatedBusinessObject
+					if (result == null && results.ContainsKey(tEx.ElementType.FullName))
                         result = results[tEx.ElementType.FullName]
-                            .Select(obj => Convert.ChangeType(obj.Value, tEx.ElementType))
+                            .Select(obj => Convert.ChangeType(obj.Value, tEx.ElementType))  //is this needed? at the very least, can it be moved to after the where
                             .Where(obj => pt.ColumnValue(obj, KeyID).Equals(itemID)).ToArray();
                     
                     //if none found but recursiveLoad is allowed, manually get the results
@@ -108,13 +111,17 @@ namespace MereCatalog
 						continue;
                     string KeyID = t.HasPropertyAttribute(property) ? t.PropertyAttribute(property).KeyID : tEx.Type.Name + "ID";
                     object id = t.ColumnValue(item, KeyID);
-                    //if in the results then use, else load in using Find method on the relatedBusinessObject
-                    if (results.ContainsKey(tEx.Type.FullName) && results[tEx.Type.FullName].ContainsKey(id))
-                        result = results[tEx.Type.FullName][id];
-                    else if (recursiveLoad) { //if none found but recursiveLoad is allowed, manually get the results
-                        result = p._FindByIDMethod(tEx.Type).Invoke(p, new object[] { false, false, id });
-						Add(result);
-                    }
+					//if in the results then use, else load in using Find method on the relatedBusinessObject
+					if (pt.Cached && pt.Cache != null)
+						result = pt.Cache.FirstOrDefault(o => pt.ID(o).Equals(id));
+					if (result == null) {
+						if (results.ContainsKey(tEx.Type.FullName) && results[tEx.Type.FullName].ContainsKey(id))
+							result = results[tEx.Type.FullName][id];
+						else if (recursiveLoad) { //if none found but recursiveLoad is allowed, manually get the results
+							result = p._FindByIDMethod(tEx.Type).Invoke(p, new object[] { false, false, id });
+							Add(result);
+						}
+					}
                     if (result != null)
                         property.SetValue(item, result, null);
                 }

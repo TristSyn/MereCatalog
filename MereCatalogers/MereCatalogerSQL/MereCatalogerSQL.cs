@@ -88,16 +88,23 @@ namespace MereCatalog {
 				string KeyID = p.HasPropertyAttribute(property) ? p.PropertyAttribute(property).KeyID : tEx.ElementType.Name + "ID";
 				if (!tEx.IsListOrArray && pt.IDProperty == null)
 					continue;
-				string qry = string.Format(";\r\nSELECT {0} FROM [{1}] WHERE {2} IN (SELECT {3} FROM [{4}] {5})"
-					, string.Join(", ", pt.Columns.Select(c => c.Name))
-					, pt.TableName
-					, tEx.IsListOrArray ? p.IDProperty.Name : pt.IDProperty.Name //array/list issue if FK isn't same as ID Name
-					, tEx.IsListOrArray ? p.IDProperty.Name : KeyID
-					, p.TableName
-					, where.CommandText);
+				if (pt.Cached) {
+					if (pt.Cache == null && !types.Contains(tEx.ElementType)) {
+						cmd.CommandText += string.Format(";\r\nSELECT {0} FROM [{1}]", string.Join(", ", pt.Columns.Select(c => c.Name)), pt.TableName);
+						types.Add(tEx.ElementType);
+					}
+				} else {
+					string qry = string.Format(";\r\nSELECT {0} FROM [{1}] WHERE {2} IN (SELECT {3} FROM [{4}] {5})"
+						, string.Join(", ", pt.Columns.Select(c => c.Name))
+						, pt.TableName
+						, tEx.IsListOrArray ? p.IDProperty.Name : pt.IDProperty.Name //array/list issue if FK isn't same as ID Name
+						, tEx.IsListOrArray ? p.IDProperty.Name : KeyID
+						, p.TableName
+						, where.CommandText);
 
-				cmd.CommandText += qry;
-				types.Add(tEx.ElementType);
+					cmd.CommandText += qry;
+					types.Add(tEx.ElementType);
+				}
 			}
 			return types.ToArray();
 		}
@@ -116,7 +123,8 @@ namespace MereCatalog {
 			if (typeof(T) != types[0])
 				throw new Exception("First Type does not match Generic Type");
 			ResultSet<T[]> rs = null;
-			try {
+			//try 
+			{
 				using (IDbConnection connection = ConnectionNew()) {
 
 					cmd.Connection = connection;
@@ -133,21 +141,21 @@ namespace MereCatalog {
 								InstantiateProperties(pt, obj, s => reader[s]);
 								results.Add(obj);
 							}
+							if (pt.Cached && pt.Cache == null)
+								pt.Cache = results.ToArray(); //check if it's cacheable and add if not already cached
 							if (rs == null)
 								rs = new ResultSet<T[]>((T[])results.ToArray(pt.Type));
 							else
 								rs.Add(results.ToArray(pt.Type));
 							reader.NextResult();
-						}
-						catch (Exception ex) { } //no error handling for now
+						} catch (Exception ex) { } //no error handling for now
 						i++;
 					}
 					connection.Close();
 				}
 				rs.ProcessQueue(this, recursiveLoad);
-			} 
-			catch (Exception ex) { }
-			
+			} //catch (Exception ex) { }
+
 			return rs;
 		}
 
@@ -189,7 +197,7 @@ namespace MereCatalog {
 						value = DBNull.Value;
 					break;
 			}
-			
+
 			return value ?? DBNull.Value;
 		}
 
@@ -225,9 +233,15 @@ namespace MereCatalog {
 			cmd.CommandType = cmdType;
 			switch (cmdType) {
 				case CommandType.Text:
-					cmd = whereClause(schema, parameters);
-					cmd.CommandType = cmdType;
-					cmd.CommandText = string.Format("SELECT {0} FROM [{1}] {2}", string.Join(", ", schema.Columns.Select(c => c.Name)), schema.TableName, cmd.CommandText);
+					if (schema.Cached) {
+						cmd = CommandNew();
+						cmd.CommandType = cmdType;
+						cmd.CommandText = string.Format("SELECT {0} FROM [{1}]", string.Join(", ", schema.Columns.Select(c => c.Name)), schema.TableName);
+					} else {
+						cmd = whereClause(schema, parameters);
+						cmd.CommandType = cmdType;
+						cmd.CommandText = string.Format("SELECT {0} FROM [{1}] {2}", string.Join(", ", schema.Columns.Select(c => c.Name)), schema.TableName, cmd.CommandText);
+					}
 					break;
 				case CommandType.StoredProcedure:
 					if (parameters != null && parameters.Length > 0) {

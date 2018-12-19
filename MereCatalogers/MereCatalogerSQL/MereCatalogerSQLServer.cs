@@ -5,8 +5,7 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Text;
 
-namespace MereCatalog
-{
+namespace MereCatalog {
 	/// <summary>
 	/// A SQL Server specific MereCataloger.
 	/// Adds the ability to return a ResultSet from a stored procedure.
@@ -15,22 +14,22 @@ namespace MereCatalog
 		public string ConnectionStringName = "MereCatalogSQLServer_ConnectionString";
 
 		public MereCatalogerSQLServer() { }
-        public MereCatalogerSQLServer(string connectionStringName) : this() {
-            ConnectionStringName = connectionStringName;
-        }
+		public MereCatalogerSQLServer(string connectionStringName) : this() {
+			ConnectionStringName = connectionStringName;
+		}
 
-        protected override IDbCommand CommandNew() { return new SqlCommand(); }
+		protected override IDbCommand CommandNew() { return new SqlCommand(); }
 
-        protected override IDbConnection ConnectionNew() { return new SqlConnection(ConfigurationManager.ConnectionStrings[ConnectionStringName].ConnectionString); }
+		protected override IDbConnection ConnectionNew() { return new SqlConnection(ConfigurationManager.ConnectionStrings[ConnectionStringName].ConnectionString); }
 
-        public override IDbDataParameter ParameterNew(string name, object value) { return new SqlParameter(name, value); }
+		public override IDbDataParameter ParameterNew(string name, object value) { return new SqlParameter(name, value); }
 
 		public ResultSet<T[]> LoadFromSP<T>(string sp, Type[] types, bool recursiveLoad, params object[] parameters) where T : class {
 
 			Catalogable p = Catalogable.For(typeof(T));
-            IDbCommand cmd = findallcmd(p, CommandType.StoredProcedure, ParameterList(parameters));
+			IDbCommand cmd = findallcmd(p, CommandType.StoredProcedure, ParameterList(parameters));
 			cmd.CommandText = sp;
 			return Load<T>(types, cmd, recursiveLoad);
 		}
-    }
+	}
 }

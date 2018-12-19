@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -111,7 +112,10 @@ namespace MereCatalog
         public object ID(object target) { return IDProperty.GetValue(target, null); }
         public Type IDType { get { return IDProperty.PropertyType; } }
 
-		public string TableName { get { return TableAttribute.TableName; } }
+		public string TableName { get { return TableAttribute.TableName ?? Type.Name; } }
+        public bool Cached { get { return TableAttribute.Cached; } }
+		public object[] Cache { get; set; }
+
 		private DBTableAttribute _TableAttribute;
 		private DBTableAttribute TableAttribute {
 			get {
