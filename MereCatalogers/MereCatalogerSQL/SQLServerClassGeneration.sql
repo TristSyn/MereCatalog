@@ -8,7 +8,8 @@ ALTER FUNCTION _TableAsClass
 (
 	@tableName nvarchar(256),
 	@baseTable nvarchar(256),
-	@partial bit = 0
+	@partial bit = 0,
+	@KeysNullable bit = 1
 )
 RETURNS nvarchar(max)
 AS
@@ -29,6 +30,7 @@ BEGIN
 
 	WHILE @@FETCH_STATUS = 0  
 	BEGIN  
+		
 		SELECT @result = @result + '	public '
 			--https://docs.microsoft.com/en-us/sql/relational-databases/clr-integration-database-objects-types-net-framework/mapping-clr-parameter-data?view=sql-server-2017
 			+ CASE cols.Data_Type
@@ -45,41 +47,29 @@ BEGIN
 				WHEN 'real' THEN 'single'
 				WHEN 'uniqueidentifier' THEN 'Guid'
 				ELSE cols.Data_Type END
+			+ CASE WHEN @KeysNullable = 1 AND cols.IS_NULLABLE = 'YES' AND cols.DATA_TYPE NOT like '%char%' THEN '?' ELSE '' END
 			+ ' ' + cols.COLUMN_NAME + ' { get; set; }' + char(10) + char(10)
-		FROM INFORMATION_SCHEMA.COLUMNS cols
-			left join INFORMATION_SCHEMA.COLUMNS baseCols on NULLIF(@baseTable, '') IS NOT NULL AND @baseTable <> @tableName AND baseCols.TABLE_NAME = @baseTable and basecols.COLUMN_NAME = cols.COLUMN_NAME
-		WHERE cols.TABLE_NAME = @tableName AND cols.ORDINAL_POSITION = @colOrdinal AND baseCols.ORDINAL_POSITION IS NULL
-		
-		SELECT @result = @result 
-			+ '	[DBProperty(KeyID="' + COL_NAME(fc.parent_object_id,fc.parent_column_id) + '")]' + char(10)
-			+ '	public ' 
-					+ OBJECT_NAME(f.referenced_object_id) 
+			--+ str(f.parent_object_id)
+			+ CASE WHEN fk.name is not null then 
+				'	[DBProperty(KeyID="' + cols.COLUMN_NAME + '")]' + char(10) --+ COL_NAME(fc.parent_object_id,fc.parent_column_id) + '")]' + char(10)
+				+ '	public ' 
+					+ OBJECT_NAME(fk.referenced_object_id) 
 					+ ' ' 
 					+ CASE WHEN RIGHT(cols.COLUMN_NAME, 2) = 'ID' THEN LEFT(cols.COLUMN_NAME, LEN(cols.COLUMN_NAME)-2) ELSE cols.COLUMN_NAME + '_OBJ' END
 					+ ' { get; set; }' + char(10) 	 + char(10)   
-		FROM 
-		   sys.foreign_keys AS f
-			INNER JOIN sys.foreign_key_columns AS fc ON f.OBJECT_ID = fc.constraint_object_id
-			--INNER JOIN sys.tables t ON t.OBJECT_ID = fc.referenced_object_id
-			JOIN INFORMATION_SCHEMA.COLUMNS cols on cols.TABLE_NAME= @tableName AND cols.COLUMN_NAME = COL_NAME(fc.parent_object_id,fc.parent_column_id)
+			ELSE '' END
+		FROM INFORMATION_SCHEMA.COLUMNS cols
 			left join INFORMATION_SCHEMA.COLUMNS baseCols on NULLIF(@baseTable, '') IS NOT NULL AND @baseTable <> @tableName AND baseCols.TABLE_NAME = @baseTable and basecols.COLUMN_NAME = cols.COLUMN_NAME
-		WHERE OBJECT_NAME (f.parent_object_id) = @tableName AND cols.ORDINAL_POSITION = @colOrdinal AND baseCols.ORDINAL_POSITION IS NULL
-		
+			
+			LEFT JOIN (
+				SELECT fc.*, f.name
+				FROM sys.foreign_key_columns AS fc
+					JOIN sys.foreign_keys AS f ON f.OBJECT_ID = fc.constraint_object_id
+				) fk on OBJECT_NAME (fk.parent_object_id) = @tableName AND cols.COLUMN_NAME = COL_NAME(fk.parent_object_id,fk.parent_column_id)
+		WHERE cols.TABLE_NAME = @tableName AND cols.ORDINAL_POSITION = @colOrdinal AND baseCols.ORDINAL_POSITION IS NULL
 		
 		FETCH NEXT FROM col_cursor INTO @colOrdinal;  
 	END
-	
-	/*
-	SELECT @result = @result 
-		+ '	//public '+replace(t.name, ' ', '')+'[] '+replace(t.name, ' ', '')+' { get; set; }' + char(10) 	   
-	FROM 
-		sys.foreign_keys AS f
-		INNER JOIN sys.foreign_key_columns AS fc ON f.OBJECT_ID = fc.constraint_object_id
-		INNER JOIN sys.tables t ON t.OBJECT_ID = fc.parent_object_id
-		JOIN INFORMATION_SCHEMA.COLUMNS cols on cols.TABLE_NAME= @tableName AND cols.COLUMN_NAME = COL_NAME(fc.parent_object_id,fc.parent_column_id)
-		left join INFORMATION_SCHEMA.COLUMNS baseCols on NULLIF(@baseTable, '') IS NOT NULL AND @baseTable <> @tableName AND baseCols.TABLE_NAME = @baseTable and basecols.COLUMN_NAME = cols.COLUMN_NAME
-	WHERE OBJECT_NAME (f.referenced_object_id) = @tableName
-	*/
 
 	SET @result = @result + '}' + char(10)
 	RETURN @result
@@ -88,8 +78,9 @@ END
 GO
 
 
-select dbo._TableAsClass(tbl.TABLE_NAME, '', 1)
+select dbo._TableAsClass(tbl.TABLE_NAME, '_Base', 1, 1)
 	--'select dbo._TableAsClass('''+tbl.TABLE_NAME+''', '''', 1)'
 from INFORMATION_SCHEMA.TABLES tbl
-WHERE TABLE_TYPE = 'BASE TABLE'
+WHERE TABLE_TYPE = 'BASE TABLE' and TABLE_NAME NOT IN ('sysdiagrams')
 ORDER BY tbl.TABLE_NAME
+

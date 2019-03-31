@@ -17,6 +17,10 @@ namespace MereCatalog {
 			return MereCataloger.FindByID<C>(initialLoad, recursiveLoad, id);
         }
 
+		public static IEnumerable<C> All(bool initialLoad = true, bool recursiveLoad = false) {
+			return MereCataloger.Find<C>(initialLoad, recursiveLoad);
+		}
+
         public static void Save(C target) {
 			MereCataloger.Save(target);
         }

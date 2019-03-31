@@ -153,7 +153,8 @@ namespace MereCatalog {
 					}
 					connection.Close();
 				}
-				rs.ProcessQueue(this, recursiveLoad);
+				if(rs != null) //ie results found
+					rs.ProcessQueue(this, recursiveLoad);
 			} //catch (Exception ex) { }
 
 			return rs;
