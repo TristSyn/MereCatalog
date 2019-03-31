@@ -7,12 +7,13 @@ GO
 ALTER FUNCTION _TableAsClass
 (
 	@tableName nvarchar(256),
-	@baseTable nvarchar(256)
+	@baseTable nvarchar(256),
+	@partial bit = 0
 )
 RETURNS nvarchar(max)
 AS
 BEGIN
-	DECLARE @result nvarchar(max) = 'public class '+ replace(@tableName, ' ','')
+	DECLARE @result nvarchar(max) = 'public'+CASE WHEN @partial = 1 THEN ' partial' END + ' class '+ replace(@tableName, ' ','')
 		+ CASE WHEN NULLIF(@baseTable, '') IS NOT NULL AND @baseTable <> @tableName THEN ' : ' + @baseTable ELSE '' END 
 		+  '{' + char(10) + char(13) 
 
@@ -44,7 +45,7 @@ BEGIN
 				WHEN 'real' THEN 'single'
 				WHEN 'uniqueidentifier' THEN 'Guid'
 				ELSE cols.Data_Type END
-			+ ' ' + cols.COLUMN_NAME + ' { get; set; }' + char(10)
+			+ ' ' + cols.COLUMN_NAME + ' { get; set; }' + char(10) + char(10)
 		FROM INFORMATION_SCHEMA.COLUMNS cols
 			left join INFORMATION_SCHEMA.COLUMNS baseCols on NULLIF(@baseTable, '') IS NOT NULL AND @baseTable <> @tableName AND baseCols.TABLE_NAME = @baseTable and basecols.COLUMN_NAME = cols.COLUMN_NAME
 		WHERE cols.TABLE_NAME = @tableName AND cols.ORDINAL_POSITION = @colOrdinal AND baseCols.ORDINAL_POSITION IS NULL
@@ -55,7 +56,7 @@ BEGIN
 					+ OBJECT_NAME(f.referenced_object_id) 
 					+ ' ' 
 					+ CASE WHEN RIGHT(cols.COLUMN_NAME, 2) = 'ID' THEN LEFT(cols.COLUMN_NAME, LEN(cols.COLUMN_NAME)-2) ELSE cols.COLUMN_NAME + '_OBJ' END
-					+ ' { get; set; }' + char(10) 	   
+					+ ' { get; set; }' + char(10) 	 + char(10)   
 		FROM 
 		   sys.foreign_keys AS f
 			INNER JOIN sys.foreign_key_columns AS fc ON f.OBJECT_ID = fc.constraint_object_id
@@ -64,10 +65,7 @@ BEGIN
 			left join INFORMATION_SCHEMA.COLUMNS baseCols on NULLIF(@baseTable, '') IS NOT NULL AND @baseTable <> @tableName AND baseCols.TABLE_NAME = @baseTable and basecols.COLUMN_NAME = cols.COLUMN_NAME
 		WHERE OBJECT_NAME (f.parent_object_id) = @tableName AND cols.ORDINAL_POSITION = @colOrdinal AND baseCols.ORDINAL_POSITION IS NULL
 		
-
-
-		SELECT @result = @result + char(10)
-
+		
 		FETCH NEXT FROM col_cursor INTO @colOrdinal;  
 	END
 	
@@ -90,7 +88,8 @@ END
 GO
 
 
-select dbo._TableAsClass(tbl.TABLE_NAME, '')
+select dbo._TableAsClass(tbl.TABLE_NAME, '', 1)
+	--'select dbo._TableAsClass('''+tbl.TABLE_NAME+''', '''', 1)'
 from INFORMATION_SCHEMA.TABLES tbl
 WHERE TABLE_TYPE = 'BASE TABLE'
 ORDER BY tbl.TABLE_NAME
