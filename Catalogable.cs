@@ -109,6 +109,10 @@ namespace MereCatalog
 			}
 		}
 
+		public string Reference {
+			get { return TableAttribute.Reference ?? Type.Name + "ID"; }
+		}
+
         public object ID(object target) { return IDProperty.GetValue(target, null); }
         public Type IDType { get { return IDProperty.PropertyType; } }
 

@@ -12,6 +12,11 @@ namespace MereCatalog
     {
         public string TableName;
         public bool Cached;
+
+		/// <summary>
+		/// A string indicating how objects in this table are referenced by other objects. In SQL world, this indicates what other tables would as a foreign key to refer to this table.
+		/// </summary>
+		public string Reference;
     }
 
 	[AttributeUsage(AttributeTargets.Property)]

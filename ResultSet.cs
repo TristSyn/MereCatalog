@@ -76,7 +76,7 @@ namespace MereCatalog
 				Catalogable pt = Catalogable.For(tEx.ElementType);
                 if (tEx.IsListOrArray) {
                     object[] result = null;
-					string KeyID = t.HasPropertyAttribute(property) ? t.PropertyAttribute(property).KeyID : t.Type.Name + "ID";
+					string KeyID = t.HasPropertyAttribute(property) ? t.PropertyAttribute(property).KeyID : t.Reference;
 
 					if (pt.Cached && pt.Cache != null) {
 						result = pt.Cache.Where(obj => pt.ColumnValue(obj, KeyID).Equals(itemID)).ToArray();
@@ -109,7 +109,7 @@ namespace MereCatalog
                     object result = null;
 					if (pt.IDProperty == null) //possibly because it's not been "excluded"
 						continue;
-                    string KeyID = t.HasPropertyAttribute(property) ? t.PropertyAttribute(property).KeyID : tEx.Type.Name + "ID";
+                    string KeyID = t.HasPropertyAttribute(property) ? t.PropertyAttribute(property).KeyID : pt.Reference;
                     object id = t.ColumnValue(item, KeyID);
 					//if in the results then use, else load in using Find method on the relatedBusinessObject
 					if (pt.Cached && pt.Cache != null)

@@ -85,20 +85,25 @@ namespace MereCatalog {
 			foreach (PropertyInfo property in p.Associated) {
 				PropertyInfoEx tEx = PropertyInfoEx.ForType(property.PropertyType);
 				Catalogable pt = Catalogable.For(tEx.ElementType);
-				string KeyID = p.HasPropertyAttribute(property) ? p.PropertyAttribute(property).KeyID : tEx.ElementType.Name + "ID";
 				if (!tEx.IsListOrArray && pt.IDProperty == null)
 					continue;
+				
 				if (pt.Cached) {
 					if (pt.Cache == null && !types.Contains(tEx.ElementType)) {
-						cmd.CommandText += string.Format(";\r\nSELECT {0} FROM [{1}]", string.Join(", ", pt.Columns.Select(c => c.Name)), pt.TableName);
+						cmd.CommandText += string.Format(";\r\nSELECT {0} FROM [{1}]", string.Join(", ", pt.Columns.Select(c => "["+c.Name+"]")), pt.TableName);
 						types.Add(tEx.ElementType);
 					}
 				} else {
+					/* either	single property		select ... from assoctable where id in (select assoctableid from parenttable where ...)
+					 * or		array property		select ... from assoctable where parenttableid in (select id from parenttable where ...)
+					 */
+					string assocTableKeyID = tEx.IsListOrArray ? p.Reference : pt.IDProperty.Name; //array/list issue if FK isn't same as ID Name
+					string parentTableKeyID = tEx.IsListOrArray ? p.IDProperty.Name : (p.HasPropertyAttribute(property) ? p.PropertyAttribute(property).KeyID : pt.Reference);
 					string qry = string.Format(";\r\nSELECT {0} FROM [{1}] WHERE {2} IN (SELECT {3} FROM [{4}] {5})"
-						, string.Join(", ", pt.Columns.Select(c => c.Name))
+						, string.Join(", ", pt.Columns.Select(c => "[" + c.Name + "]"))
 						, pt.TableName
-						, tEx.IsListOrArray ? p.IDProperty.Name : pt.IDProperty.Name //array/list issue if FK isn't same as ID Name
-						, tEx.IsListOrArray ? p.IDProperty.Name : KeyID
+						, assocTableKeyID
+						, parentTableKeyID
 						, p.TableName
 						, where.CommandText);
 
@@ -234,15 +239,9 @@ namespace MereCatalog {
 			cmd.CommandType = cmdType;
 			switch (cmdType) {
 				case CommandType.Text:
-					if (schema.Cached) {
-						cmd = CommandNew();
-						cmd.CommandType = cmdType;
-						cmd.CommandText = string.Format("SELECT {0} FROM [{1}]", string.Join(", ", schema.Columns.Select(c => c.Name)), schema.TableName);
-					} else {
-						cmd = whereClause(schema, parameters);
-						cmd.CommandType = cmdType;
-						cmd.CommandText = string.Format("SELECT {0} FROM [{1}] {2}", string.Join(", ", schema.Columns.Select(c => c.Name)), schema.TableName, cmd.CommandText);
-					}
+					cmd = schema.Cached ? CommandNew() : whereClause(schema, parameters);
+					cmd.CommandType = cmdType;
+					cmd.CommandText = string.Format("SELECT {0} FROM [{1}] {2}", string.Join(", ", schema.Columns.Select(c => "["+c.Name+"]")), schema.TableName, cmd.CommandText); //cmd.CommandText will be empty for schema.Cached
 					break;
 				case CommandType.StoredProcedure:
 					if (parameters != null && parameters.Length > 0) {
