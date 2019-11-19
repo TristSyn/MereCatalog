@@ -34,7 +34,7 @@ namespace MereCatalog
         {
 			if (value == null)
 				return;
-			PropertyInfoEx tEx = PropertyInfoEx.For(value);
+			TypeEx tEx = TypeEx.For(value);
 			Catalogable pt = Catalogable.For(tEx.ElementType);
             if (tEx.IsListOrArray) {
                 foreach (object obj in (IList)value)
@@ -70,8 +70,8 @@ namespace MereCatalog
             object itemID = t.ID(item);
 
             foreach (PropertyInfo property in t.Associated) {
-				PropertyInfoEx tEx = PropertyInfoEx.ForType(property.PropertyType);
-                if (property.GetValue(item, null) != null)
+				TypeEx tEx = property.TypeEx();
+				if (property.GetValue(item, null) != null)
                     continue;
 				Catalogable pt = Catalogable.For(tEx.ElementType);
                 if (tEx.IsListOrArray) {
@@ -99,7 +99,7 @@ namespace MereCatalog
                             Array.Copy(result, array, result.Length);
                             property.SetValue(item, array, null);
                         } else {
-                            IList list = (IList)Activator.CreateInstance(tEx.Type);
+                            IList list = (IList)Activator.CreateInstance(property.PropertyType);
                             foreach (object o in (object[])result)
                                 list.Add(o);
                             property.SetValue(item, list, null);
@@ -115,12 +115,12 @@ namespace MereCatalog
 					if (pt.Cached && pt.Cache != null)
 						result = pt.Cache.FirstOrDefault(o => pt.ID(o).Equals(id));
 					else { //if (result == null) { 
-						if (results.ContainsKey(tEx.Type.FullName) && results[tEx.Type.FullName].ContainsKey(id))
-							result = results[tEx.Type.FullName][id];
+						if (results.ContainsKey(property.PropertyType.FullName) && results[property.PropertyType.FullName].ContainsKey(id))
+							result = results[property.PropertyType.FullName][id];
 						else if (recursiveLoad) { //if none found but recursiveLoad is allowed, manually get the results
 							//if ((long)id != 0) {
 							if(id != null) { 
-								result = p._FindByIDMethod(tEx.Type).Invoke(p, new object[] { false, false, id });
+								result = p._FindByIDMethod(property.PropertyType).Invoke(p, new object[] { false, false, id });
 								Add(result);
 							}
 						}

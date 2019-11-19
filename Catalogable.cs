@@ -72,8 +72,8 @@ namespace MereCatalog
         protected PropertyInfo ColumnByName(string name) { return Columns.FirstOrDefault(c => c.Name == name); }
 		protected PropertyInfo PropertyByName(string name) { return All.FirstOrDefault(f => f.Name == name); }
 
-        public object ColumnValue(object target, string name) { 
-            PropertyInfo c = ColumnByName(name);
+        public object ColumnValue(object target, string name) {
+			PropertyInfo c = ColumnByName(name);
             return c == null ? null : c.GetValue(target, null); 
         }
 

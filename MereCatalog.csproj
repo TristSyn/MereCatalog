@@ -51,7 +51,7 @@
     <Compile Include="MereCatalogers\MereCatalogerSQL\MereCatalogerSQLServer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ResultSet.cs" />
-    <Compile Include="PropertyInfoEx.cs" />
+    <Compile Include="TypeEx.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="MereCatalogers\MereCatalogerSQL\SQLServerClassGeneration.sql" />

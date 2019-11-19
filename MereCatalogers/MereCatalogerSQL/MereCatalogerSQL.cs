@@ -83,7 +83,7 @@ namespace MereCatalog {
 			IDbCommand where = whereClause(p, parameters);
 			List<Type> types = new List<Type>() { p.Type };
 			foreach (PropertyInfo property in p.Associated) {
-				PropertyInfoEx tEx = PropertyInfoEx.ForType(property.PropertyType);
+				TypeEx tEx = property.TypeEx();
 				Catalogable pt = Catalogable.For(tEx.ElementType);
 				if (!tEx.IsListOrArray && pt.IDProperty == null)
 					continue;
