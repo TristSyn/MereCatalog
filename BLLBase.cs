@@ -9,7 +9,7 @@ namespace MereCatalog {
 	/// A base class for a very simple Business Logic Layer
 	/// </summary>
 	/// <typeparam name="T"></typeparam>
-	public abstract class BLLBase<C, idType> where C : class {
+	public abstract class MereCatalogerBLL<C, idType> where C : class {
 
 		protected static MereCataloger MereCataloger { get { return MereCataloger.Instance; } }
 
@@ -29,23 +29,19 @@ namespace MereCatalog {
 			MereCataloger.Delete(target);
         }
     }
-
-	/// <summary>
-	/// A base class for a very simple SQL Server Business Logic Layer
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	public abstract class BLLSQLServer<C, idType> : BLLBase<C, idType> where C : class {
-
+	public abstract class MereCatalogerBLLSQLServer<C, idType> : MereCatalogerBLL<C, idType> where C : class
+	{
 		private static MereCatalogerSQLServer mereCataloger;
 		protected new static MereCatalogerSQLServer MereCataloger {
-            get {
-				if (mereCataloger == null) {
+			get {
+				if (mereCataloger == null)
+				{
 					if (!(MereCatalog.MereCataloger.Instance is MereCatalogerSQLServer))
-                        throw new Exception("Must be a SQL Server MereCataloger as this calls a Stored Procedure");
+						throw new Exception("Must be a SQL Server MereCataloger as this calls a Stored Procedure");
 					mereCataloger = (MereCatalogerSQLServer)MereCatalog.MereCataloger.Instance;
-                }
+				}
 				return mereCataloger;
-            }
-        }
-    }
+			}
+		}
+	}
 }
