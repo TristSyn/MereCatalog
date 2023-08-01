@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
-using System.Text;
 
 namespace MereCatalog {
 	/// <summary>
@@ -11,16 +9,18 @@ namespace MereCatalog {
 	/// Adds the ability to return a ResultSet from a stored procedure.
 	/// </summary>
 	public class MereCatalogerSQLServer : MereCatalogerSQL {
-		public string ConnectionStringName = "MereCatalogSQLServer_ConnectionString";
+		//public string ConnectionStringName { get; private set; }
+		public static readonly string CONNECTION_STRING_NAME = "MereCatalogSQLServer_ConnectionString";
+		public string ConnectionString { get; private set; }
 
-		public MereCatalogerSQLServer() { }
-		public MereCatalogerSQLServer(string connectionStringName) : this() {
-			ConnectionStringName = connectionStringName;
+		public MereCatalogerSQLServer(string connectionString)
+		{
+			ConnectionString = connectionString;
 		}
 
 		protected override IDbCommand CommandNew() { return new SqlCommand(); }
 
-		protected override IDbConnection ConnectionNew() { return new SqlConnection(ConfigurationManager.ConnectionStrings[ConnectionStringName].ConnectionString); }
+		protected override IDbConnection ConnectionNew() { return new SqlConnection(ConnectionString); }
 
 		public override IDbDataParameter ParameterNew(string name, object value) { return new SqlParameter(name, value); }
 

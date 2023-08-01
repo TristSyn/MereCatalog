@@ -1,12 +1,7 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.Serialization;
-using System.ServiceModel;
-using System.Text;
 
 namespace MereCatalog
 {
@@ -14,15 +9,9 @@ namespace MereCatalog
 	/// MereCatalog is a base class for representing a data store, e.g. a SQL database.
 	/// </summary>
 	public abstract class MereCataloger	{
-
-		private static MereCataloger instance;
 		public static MereCataloger Instance {
-			get {
-				if (instance == null)
-					instance = new MereCatalogerSQLServer();
-				return instance;
-			}
-			set { instance = value; }
+			get;
+			set;
 		}
 
 		#region CRUD
