@@ -11,7 +11,7 @@ namespace MereCatalog {
 	/// <typeparam name="T"></typeparam>
 	public abstract class MereCatalogerBLL<C, idType> where C : class {
 
-		protected static MereCataloger MereCataloger { get { return MereCataloger.Instance; } }
+		protected static MereCataloger MereCataloger => MereCataloger.Instance;
 
 		public static C ByID(idType id, bool initialLoad = true, bool recursiveLoad = false) {
 			return MereCataloger.FindByID<C>(initialLoad, recursiveLoad, id);
