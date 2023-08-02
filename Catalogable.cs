@@ -13,7 +13,7 @@ namespace MereCatalog
 	/// This is used so that it is cached as opposed to being reflected each time it's required. Reflecting has a measurable performance hit.
 	/// </summary>
 	public class Catalogable {
-		private static Type[] AllowedNonPrimitives = new Type[] { typeof(string), typeof(DateTime), typeof(decimal) };
+		private static readonly Type[] AllowedNonPrimitives = new Type[] { typeof(string), typeof(DateTime), typeof(decimal) };
 		protected Catalogable(Type targetType) { Type = targetType; }
 
 		protected Catalogable(object target) { Type = target.GetType(); }
@@ -73,8 +73,7 @@ namespace MereCatalog
 		protected PropertyInfo PropertyByName(string name) { return All.FirstOrDefault(f => f.Name == name); }
 
         public object ColumnValue(object target, string name) {
-			PropertyInfo c = ColumnByName(name);
-            return c == null ? null : c.GetValue(target, null); 
+            return ColumnByName(name)?.GetValue(target, null); 
         }
 
 		/// <summary>

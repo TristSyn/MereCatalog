@@ -24,12 +24,12 @@ namespace MereCatalog {
 
 		public override IDbDataParameter ParameterNew(string name, object value) { return new SqlParameter(name, value); }
 
-		public ResultSet<T[]> LoadFromSP<T>(string sp, Type[] types, bool recursiveLoad, params object[] parameters) where T : class {
+		public ResultSet<T[]> LoadFromSP<T>(string sp, Type[] types, bool eagerLoad, params object[] parameters) where T : class {
 
 			Catalogable p = Catalogable.For(typeof(T));
 			IDbCommand cmd = findallcmd(p, CommandType.StoredProcedure, ParameterList(parameters));
 			cmd.CommandText = sp;
-			return Load<T>(types, cmd, recursiveLoad);
+			return Load<T>(types, cmd, eagerLoad);
 		}
 	}
 }

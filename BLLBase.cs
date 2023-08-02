@@ -13,12 +13,12 @@ namespace MereCatalog {
 
 		protected static MereCataloger MereCataloger => MereCataloger.Instance;
 
-		public static C ByID(idType id, bool initialLoad = true, bool recursiveLoad = false) {
-			return MereCataloger.FindByID<C>(initialLoad, recursiveLoad, id);
+		public static C ByID(idType id, bool eagerLoad = true) {
+			return MereCataloger.FindByID<C>(eagerLoad, id);
         }
 
-		public static IEnumerable<C> All(bool initialLoad = true, bool recursiveLoad = false) {
-			return MereCataloger.Find<C>(initialLoad, recursiveLoad);
+		public static IEnumerable<C> All(bool eagerLoad = true) {
+			return MereCataloger.Find<C>(eagerLoad);
 		}
 
         public static void Save(C target) {

@@ -16,13 +16,13 @@ namespace MereCatalog
 
 		#region CRUD
 
-        public T[] Find<T>(params object[] parameters) where T : class { return Find<T>(true, false, parameters); }
-        public T FindByID<T>(object id) where T : class { return FindByID<T>(true, false, id); }
+        //public T[] Find<T>(params object[] parameters) where T : class { return Find<T>(true, false, parameters); }
+        //public T FindByID<T>(object id) where T : class { return FindByID<T>(true, false, id); }
 
-        public abstract T[] Find<T>(bool initialLoad, bool recursiveLoad, params object[] parameters) where T : class;
-        public virtual T FindByID<T>(bool initialLoad, bool recursiveLoad, object id) where T : class {
+        public abstract T[] Find<T>(bool eagerLoad, params object[] parameters) where T : class;
+        public virtual T FindByID<T>(bool eagerLoad, object id) where T : class {
 			Catalogable p = Catalogable.For(typeof(T));
-            T[] results = Find<T>(initialLoad, recursiveLoad, p.IDProperty.Name, id);
+            T[] results = Find<T>(eagerLoad, p.IDProperty.Name, id);
 			if (results == null)
 				return null;
 			return results.Length == 1 ? results[0] : results.FirstOrDefault(obj => p.ID(obj).Equals(id));
@@ -56,14 +56,14 @@ namespace MereCatalog
         private Dictionary<Type, MethodInfo> FindByIDMethods = new Dictionary<Type,MethodInfo>();
         public MethodInfo _FindByIDMethod(Type t) {
             if(!FindByIDMethods.ContainsKey(t))
-                FindByIDMethods.Add(t, this.GetType().GetMethod("FindByID", new Type[] { typeof(bool), typeof(bool), typeof(object) }).MakeGenericMethod(t));
+                FindByIDMethods.Add(t, this.GetType().GetMethod("FindByID", new Type[] { typeof(bool), typeof(object) }).MakeGenericMethod(t));
             return FindByIDMethods[t];
         }
 
         private Dictionary<Type, MethodInfo> FindMethods = new Dictionary<Type, MethodInfo>();
         public MethodInfo _FindMethod(Type t) {
             if (!FindMethods.ContainsKey(t))
-                FindMethods.Add(t, this.GetType().GetMethod("Find", new Type[] { typeof(bool), typeof(bool), typeof(object[]) }).MakeGenericMethod(t));
+                FindMethods.Add(t, this.GetType().GetMethod("Find", new Type[] { typeof(bool), typeof(object[]) }).MakeGenericMethod(t));
             return FindMethods[t];
         }
 	}

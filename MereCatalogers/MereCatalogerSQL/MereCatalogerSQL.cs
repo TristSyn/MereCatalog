@@ -17,17 +17,17 @@ namespace MereCatalog {
 
 		#region CRUD
 
-		public override T[] Find<T>(bool initialLoad, bool recursiveLoad, params object[] parameters) {
+		public override T[] Find<T>(bool eagerLoad, params object[] parameters) {
 			Catalogable p = Catalogable.For(typeof(T));
 			IDbDataParameter[] pl = ParameterList(parameters);
 			IDbCommand cmd = findallcmd(p, CommandType.Text, pl);
 			ResultSet<T[]> result;
-			if (initialLoad) {
+			if (eagerLoad) {
 				Type[] types = Fullify(cmd, p, pl);
-				result = Load<T>(types, cmd, recursiveLoad);
+				result = Load<T>(types, cmd, eagerLoad);
 			} else
-				result = Load<T>(new Type[] { typeof(T) }, cmd, recursiveLoad);
-			return result != null ? result.Result : null;
+				result = Load<T>(new Type[] { typeof(T) }, cmd, eagerLoad);
+			return result?.Result;
 		}
 
 		public override void Save(object target, bool isNew) {
@@ -79,6 +79,13 @@ namespace MereCatalog {
 
 		#endregion executes
 
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="cmd"></param>
+		/// <param name="p"></param>
+		/// <param name="parameters"></param>
+		/// <returns></returns>
 		protected Type[] Fullify(IDbCommand cmd, Catalogable p, params IDbDataParameter[] parameters) {
 			IDbCommand where = whereClause(p, parameters);
 			List<Type> types = new List<Type>() { p.Type };
@@ -122,9 +129,9 @@ namespace MereCatalog {
 		/// <typeparam name="T">The Type of the first (and primary) result for this call to Load</typeparam>
 		/// <param name="types">The full list of types that will be returned by the DBCommand</param>
 		/// <param name="cmd">The DBCommand to run</param>
-		/// <param name="recursiveLoad">Dictates whether to manually attempt to load missing results expected during wiring up the "associated properties</param>
+		/// <param name="eagerLoad">Dictates whether to manually attempt to load missing results expected during wiring up the "associated properties</param>
 		/// <returns></returns>
-		protected ResultSet<T[]> Load<T>(Type[] types, IDbCommand cmd, bool recursiveLoad) where T : class {
+		protected ResultSet<T[]> Load<T>(Type[] types, IDbCommand cmd, bool eagerLoad) where T : class {
 			if (typeof(T) != types[0])
 				throw new Exception("First Type does not match Generic Type");
 			ResultSet<T[]> rs = null;
@@ -158,8 +165,7 @@ namespace MereCatalog {
 					}
 					connection.Close();
 				}
-				if(rs != null) //ie results found
-					rs.ProcessQueue(this, recursiveLoad);
+				rs?.ProcessQueue(this, eagerLoad);
 			} //catch (Exception ex) { }
 
 			return rs;
@@ -183,7 +189,6 @@ namespace MereCatalog {
 		/// <returns></returns>
 		protected object GetParameterValue(PropertyInfo property, object item) {
 			object value = property.GetValue(item, null);
-			Type t = property.GetType();
 
 			switch (property.PropertyType.Name) {
 				case "Int32":

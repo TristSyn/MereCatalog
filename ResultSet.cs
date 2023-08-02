@@ -53,10 +53,10 @@ namespace MereCatalog
 			}
 		}
 
-		public void ProcessQueue(MereCataloger p, bool recursiveLoad) {
+		public void ProcessQueue(MereCataloger p, bool eagerLoad) {
 			//once the raw results have been processed, connect all the related objects
-			while (queue.Count > 0)
-				InstantiateAssociated(p, queue.Dequeue(), recursiveLoad);
+			while (queue.Any())
+				InstantiateAssociated(p, queue.Dequeue(), eagerLoad);
 		}
 
 		/// <summary>
@@ -64,8 +64,8 @@ namespace MereCatalog
 		/// </summary>
 		/// <param name="p">The MereCataloger to attempt to load from if required</param>
 		/// <param name="item">the item that is being parsed and "associated"</param>
-		/// <param name="recursiveLoad">Dictates whether to manually attempt to load missing results expected during wiring up the "associated properties</param>
-		private void InstantiateAssociated(MereCataloger p, object item, bool recursiveLoad) {
+		/// <param name="eagerLoad">Dictates whether to manually attempt to load missing results expected during wiring up the "associated properties</param>
+		private void InstantiateAssociated(MereCataloger p, object item, bool eagerLoad) {
 			Catalogable t = Catalogable.For(item);
             object itemID = t.ID(item);
 
@@ -87,9 +87,9 @@ namespace MereCatalog
 								.Select(obj => Convert.ChangeType(obj.Value, tEx.ElementType))  //is this needed? at the very least, can it be moved to after the where
 								.Where(obj => pt.ColumnValue(obj, KeyID).Equals(itemID)).ToArray();
 
-						//if none found but recursiveLoad is allowed, manually get the results
-						if ((result == null || ((IList)result).Count == 0) && recursiveLoad) {
-							result = (object[])p._FindMethod(tEx.ElementType).Invoke(p, new object[] { false, false, new object[] { KeyID, itemID } });
+						//if none found but eagerLoad is allowed, manually get the results
+						if ((result == null || ((IList)result).Count == 0) && eagerLoad) {
+							result = (object[])p._FindMethod(tEx.ElementType).Invoke(p, new object[] { false, new object[] { KeyID, itemID } });
 							Add(result);
 						}
 					}
@@ -117,10 +117,10 @@ namespace MereCatalog
 					else { //if (result == null) { 
 						if (results.ContainsKey(property.PropertyType.FullName) && results[property.PropertyType.FullName].ContainsKey(id))
 							result = results[property.PropertyType.FullName][id];
-						else if (recursiveLoad) { //if none found but recursiveLoad is allowed, manually get the results
+						else if (eagerLoad) { //if none found but eagerLoad is allowed, manually get the results
 							//if ((long)id != 0) {
 							if(id != null) { 
-								result = p._FindByIDMethod(property.PropertyType).Invoke(p, new object[] { false, false, id });
+								result = p._FindByIDMethod(property.PropertyType).Invoke(p, new object[] { false, id });
 								Add(result);
 							}
 						}
