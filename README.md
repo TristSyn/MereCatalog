@@ -99,7 +99,7 @@ However no associated domain objects on the Customer or OrderDetails properties 
 To automatically load these, you must indicate that you wish load recursively any associated objects that are found. This can be quite dangerous as it could end up generating and executing MANY DBCommands
 
 ``` C#
-Order order = Orders.ByID(10255, recursiveLoad: true);
+Order order = Orders.ByID(10255, eagerLoad: true);
 ```
 
 [![Recursive Load](./images/RecursiveLoad.PNG)](./images/RecursiveLoad.PNG)
