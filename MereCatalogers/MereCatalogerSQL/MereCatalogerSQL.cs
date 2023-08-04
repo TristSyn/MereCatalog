@@ -14,19 +14,21 @@ namespace MereCatalog
 	public abstract class MereCatalogerSQL : MereCataloger {
 
 		#region CRUD
+
+		//TODO: caching of the queryset - would need to parameterise the where clause and likely move the queries over to JOIN style rather than subqueries.
 		public override T[] Find<T>(bool eagerLoad, params object[] parameters)
 		{
 			Catalogable p = Catalogable.For(typeof(T));
 			IDbDataParameter[] pl = ParameterList(parameters);
 			IDbCommand cmd = findallcmd(p, CommandType.Text, pl);
-			var cmdd = whereClause(p, pl);
+			var whereClauseCmd = whereClause(p, pl);
 
 			QuerySet querySet = new QuerySet(p, cmd);
 			ResultSet<T[]> result;
 
 			//iterate through associateds, adding queries as we go
 			if (eagerLoad) {
-				BuildOut(querySet, p, cmdd.CommandText, string.Empty);
+				BuildOut(querySet, p, whereClauseCmd.CommandText, string.Empty);
 				var types = CompleteQuerySetCmd(querySet, cmd);
 				result = Load<T>(types, cmd, false);
 			} else
@@ -51,8 +53,10 @@ namespace MereCatalog
 			return types;
 		}
 
-		private void BuildOut(QuerySet querySet, Catalogable p, string whereCmdText, string keyIgnoreRecursion)
+		private void BuildOut(QuerySet querySet, Catalogable p, string whereCmdText, string keyIgnoreRecursion, int maxRecursion = 5)
 		{
+			if (maxRecursion == 0)
+				return;
 			foreach (PropertyInfo property in p.Associated)
 			{
 				TypeEx tEx = property.TypeEx();
@@ -69,7 +73,7 @@ namespace MereCatalog
 
 					string whereText = string.Format("SELECT {0} FROM [{1}];\r\n", pt.IDProperty.Name, pt.TableName);
 
-					BuildOut(querySet, pt, whereText, string.Empty);
+					BuildOut(querySet, pt, whereText, string.Empty, maxRecursion-1);
 				} else {
 					/* either	single property		select ... from assoctable where id in (select assoctableid from parenttable where ...)
 					 * or		array property		select ... from assoctable where parenttableid in (select id from parenttable where ...)
@@ -93,7 +97,7 @@ namespace MereCatalog
 							, newWhereCmdText);
 
 						querySet.AssociateQueries.Add(new Query(pt, cmdText));
-						BuildOut(querySet, pt, newWhereCmdText, tEx.IsListOrArray ? assocTableKeyID : string.Empty);
+						BuildOut(querySet, pt, newWhereCmdText, tEx.IsListOrArray ? assocTableKeyID : string.Empty, maxRecursion - 1);
 					}
 				}
 			}
