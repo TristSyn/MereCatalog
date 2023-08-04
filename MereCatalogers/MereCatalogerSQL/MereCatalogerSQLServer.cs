@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
@@ -24,7 +25,7 @@ namespace MereCatalog {
 
 		public override IDbDataParameter ParameterNew(string name, object value) { return new SqlParameter(name, value); }
 
-		public ResultSet<T[]> LoadFromSP<T>(string sp, Type[] types, bool eagerLoad, params object[] parameters) where T : class {
+		public ResultSet<T[]> LoadFromSP<T>(string sp, List<Type> types, bool eagerLoad, params object[] parameters) where T : class {
 
 			Catalogable p = Catalogable.For(typeof(T));
 			IDbCommand cmd = findallcmd(p, CommandType.StoredProcedure, ParameterList(parameters));

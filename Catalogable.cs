@@ -129,5 +129,7 @@ namespace MereCatalog
 				return _TableAttribute;
 			}
 		}
+
+		public override string ToString() => TableName;
 	}
 }

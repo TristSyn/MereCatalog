@@ -1,15 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Linq;
-using System.Text;
-//using System.Data.SqlClient;
 using System.Data;
 using System.Data.Common;
 using System.Reflection;
 using System.Collections;
 
-namespace MereCatalog {
+namespace MereCatalog
+{
 	/// <summary>
 	/// A base class for a SQL based MereCataloger.  May not be completely SQL variant agnostic.
 	/// </summary>
@@ -23,10 +21,10 @@ namespace MereCatalog {
 			IDbCommand cmd = findallcmd(p, CommandType.Text, pl);
 			ResultSet<T[]> result;
 			if (eagerLoad) {
-				Type[] types = Fullify(cmd, p, pl);
+				List<Type> types = Fullify(cmd, p, pl);
 				result = Load<T>(types, cmd, eagerLoad);
 			} else
-				result = Load<T>(new Type[] { typeof(T) }, cmd, eagerLoad);
+				result = Load<T>(new List<Type> { typeof(T) }, cmd, eagerLoad);
 			return result?.Result;
 		}
 
@@ -86,7 +84,7 @@ namespace MereCatalog {
 		/// <param name="p"></param>
 		/// <param name="parameters"></param>
 		/// <returns></returns>
-		protected Type[] Fullify(IDbCommand cmd, Catalogable p, params IDbDataParameter[] parameters) {
+		protected List<Type> Fullify(IDbCommand cmd, Catalogable p, params IDbDataParameter[] parameters) {
 			IDbCommand where = whereClause(p, parameters);
 			List<Type> types = new List<Type>() { p.Type };
 			foreach (PropertyInfo property in p.Associated) {
@@ -118,7 +116,7 @@ namespace MereCatalog {
 					types.Add(tEx.ElementType);
 				}
 			}
-			return types.ToArray();
+			return types;
 		}
 
 		/// <summary>
@@ -131,7 +129,7 @@ namespace MereCatalog {
 		/// <param name="cmd">The DBCommand to run</param>
 		/// <param name="eagerLoad">Dictates whether to manually attempt to load missing results expected during wiring up the "associated properties</param>
 		/// <returns></returns>
-		protected ResultSet<T[]> Load<T>(Type[] types, IDbCommand cmd, bool eagerLoad) where T : class {
+		protected ResultSet<T[]> Load<T>(List<Type> types, IDbCommand cmd, bool eagerLoad) where T : class {
 			if (typeof(T) != types[0])
 				throw new Exception("First Type does not match Generic Type");
 			ResultSet<T[]> rs = null;
@@ -144,7 +142,8 @@ namespace MereCatalog {
 
 					DbDataReader reader = (DbDataReader)cmd.ExecuteReader();
 					int i = 0;
-					while (reader.HasRows && i < types.Length) {
+					int typeCount = types.Count();
+					while (reader.HasRows && i < typeCount) {
 						try {
 							Catalogable pt = Catalogable.For(types[i]);
 							ArrayList results = new ArrayList();
@@ -246,8 +245,9 @@ namespace MereCatalog {
 				case CommandType.Text:
 					cmd = schema.Cached ? CommandNew() : whereClause(schema, parameters);
 					cmd.CommandType = cmdType;
-					cmd.CommandText = string.Format("SELECT {0} FROM [{1}] {2}", string.Join(", ", schema.Columns.Select(c => "["+c.Name+"]")), schema.TableName, cmd.CommandText); //cmd.CommandText will be empty for schema.Cached
+					cmd.CommandText = string.Format("SELECT {0} FROM [{1}] {2};\r\n", string.Join(", ", schema.Columns.Select(c => "["+c.Name+"]")), schema.TableName, cmd.CommandText); //cmd.CommandText will be empty for schema.Cached
 					break;
+					// SPs may not be available in all SQLs - should be moved to SQLServer.
 				case CommandType.StoredProcedure:
 					if (parameters != null && parameters.Length > 0) {
 						for (int i = 0; i < parameters.Length; i++)
