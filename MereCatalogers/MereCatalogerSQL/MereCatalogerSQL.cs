@@ -14,18 +14,89 @@ namespace MereCatalog
 	public abstract class MereCatalogerSQL : MereCataloger {
 
 		#region CRUD
-
-		public override T[] Find<T>(bool eagerLoad, params object[] parameters) {
+		public override T[] Find<T>(bool eagerLoad, params object[] parameters)
+		{
 			Catalogable p = Catalogable.For(typeof(T));
 			IDbDataParameter[] pl = ParameterList(parameters);
 			IDbCommand cmd = findallcmd(p, CommandType.Text, pl);
+			var cmdd = whereClause(p, pl);
+
+			QuerySet querySet = new QuerySet(p, cmd);
 			ResultSet<T[]> result;
+
+			//iterate through associateds, adding queries as we go
 			if (eagerLoad) {
-				List<Type> types = Fullify(cmd, p, pl);
-				result = Load<T>(types, cmd, eagerLoad);
+				BuildOut(querySet, p, cmdd.CommandText, string.Empty);
+				var types = CompleteQuerySetCmd(querySet, cmd);
+				result = Load<T>(types, cmd, false);
 			} else
-				result = Load<T>(new List<Type> { typeof(T) }, cmd, eagerLoad);
+				result = Load<T>(new List<Type> { typeof(T) }, cmd, false);
 			return result?.Result;
+		}
+
+		List<Type> CompleteQuerySetCmd(QuerySet querySet, IDbCommand cmd)
+		{
+			List<Type> types = new List<Type> { querySet.Type.Type };
+			foreach (var cq in querySet.CachedQueries) {
+				if (cq.Type.Cache == null) {
+					cmd.CommandText += cq.CommandText;
+					types.Add(cq.Type.Type);
+				}
+			}
+			foreach (var q in querySet.AssociateQueries) {
+				cmd.CommandText += q.CommandText;
+				types.Add(q.Type.Type);
+			}
+
+			return types;
+		}
+
+		private void BuildOut(QuerySet querySet, Catalogable p, string whereCmdText, string keyIgnoreRecursion)
+		{
+			foreach (PropertyInfo property in p.Associated)
+			{
+				TypeEx tEx = property.TypeEx();
+				Catalogable pt = Catalogable.For(tEx.ElementType);
+
+				if (!tEx.IsListOrArray && pt.IDProperty == null)
+					continue;
+
+				if (pt.Cached) {
+					if (!querySet.CachedQueries.Any(cq => cq.Type == pt)) {
+						string cmdText = string.Format("SELECT {0} FROM [{1}];\r\n", string.Join(", ", pt.Columns.Select(c => "[" + c.Name + "]")), pt.TableName);
+						querySet.CachedQueries.Add(new Query(pt, cmdText));
+					}
+
+					string whereText = string.Format("SELECT {0} FROM [{1}];\r\n", pt.IDProperty.Name, pt.TableName);
+
+					BuildOut(querySet, pt, whereText, string.Empty);
+				} else {
+					/* either	single property		select ... from assoctable where id in (select assoctableid from parenttable where ...)
+					 * or		array property		select ... from assoctable where parenttableid in (select id from parenttable where ...)
+					 */
+
+					string assocTableKeyID = tEx.IsListOrArray ? p.Reference : pt.IDProperty.Name; //array/list issue if FK isn't same as ID Name
+					string parentTableKeyID = tEx.IsListOrArray ? p.IDProperty.Name : (p.HasPropertyAttribute(property) ? p.PropertyAttribute(property).KeyID : pt.Reference);
+
+					if (string.IsNullOrEmpty(keyIgnoreRecursion) || keyIgnoreRecursion != parentTableKeyID) {
+
+						string newWhereCmdText = string.Format(" WHERE {0} IN (SELECT {1} FROM [{2}] {3})"
+							, assocTableKeyID
+							, parentTableKeyID
+							, p.TableName
+							, whereCmdText);
+
+						string cmdText = string.Format("SELECT {0} FROM [{1}] {2} {3};\r\n"
+							, string.Join(", ", pt.Columns.Select(c => "[" + c.Name + "]"))
+							, pt.TableName
+							, assocTableKeyID
+							, newWhereCmdText);
+
+						querySet.AssociateQueries.Add(new Query(pt, cmdText));
+						BuildOut(querySet, pt, newWhereCmdText, tEx.IsListOrArray ? assocTableKeyID : string.Empty);
+					}
+				}
+			}
 		}
 
 		public override void Save(object target, bool isNew) {
@@ -76,48 +147,6 @@ namespace MereCatalog
 		}
 
 		#endregion executes
-
-		/// <summary>
-		/// 
-		/// </summary>
-		/// <param name="cmd"></param>
-		/// <param name="p"></param>
-		/// <param name="parameters"></param>
-		/// <returns></returns>
-		protected List<Type> Fullify(IDbCommand cmd, Catalogable p, params IDbDataParameter[] parameters) {
-			IDbCommand where = whereClause(p, parameters);
-			List<Type> types = new List<Type>() { p.Type };
-			foreach (PropertyInfo property in p.Associated) {
-				TypeEx tEx = property.TypeEx();
-				Catalogable pt = Catalogable.For(tEx.ElementType);
-				if (!tEx.IsListOrArray && pt.IDProperty == null)
-					continue;
-				
-				if (pt.Cached) {
-					if (pt.Cache == null && !types.Contains(tEx.ElementType)) {
-						cmd.CommandText += string.Format(";\r\nSELECT {0} FROM [{1}]", string.Join(", ", pt.Columns.Select(c => "["+c.Name+"]")), pt.TableName);
-						types.Add(tEx.ElementType);
-					}
-				} else {
-					/* either	single property		select ... from assoctable where id in (select assoctableid from parenttable where ...)
-					 * or		array property		select ... from assoctable where parenttableid in (select id from parenttable where ...)
-					 */
-					string assocTableKeyID = tEx.IsListOrArray ? p.Reference : pt.IDProperty.Name; //array/list issue if FK isn't same as ID Name
-					string parentTableKeyID = tEx.IsListOrArray ? p.IDProperty.Name : (p.HasPropertyAttribute(property) ? p.PropertyAttribute(property).KeyID : pt.Reference);
-					string qry = string.Format(";\r\nSELECT {0} FROM [{1}] WHERE {2} IN (SELECT {3} FROM [{4}] {5})"
-						, string.Join(", ", pt.Columns.Select(c => "[" + c.Name + "]"))
-						, pt.TableName
-						, assocTableKeyID
-						, parentTableKeyID
-						, p.TableName
-						, where.CommandText);
-
-					cmd.CommandText += qry;
-					types.Add(tEx.ElementType);
-				}
-			}
-			return types;
-		}
 
 		/// <summary>
 		/// Runs a DBCommand and adds the various results to a ResultSet object. 
@@ -283,5 +312,29 @@ namespace MereCatalog
 		}
 
 		#endregion CRUD Commands
+	}
+
+	internal class Query {
+		public Query(Catalogable type, string cmdText) { Type = type; CommandText = cmdText; }
+		public Catalogable Type { get; set; } ///maybe string or maybe Catalogable instead of Type
+
+		public string CommandText { get; set; }
+
+		public override string ToString() => "Query: " + Type;
+	}
+
+	internal class QuerySet {
+		public Catalogable Type { get; set; }
+		public QuerySet(Catalogable p, IDbCommand cmd) {
+			Type = p;
+			DbCommand = cmd;
+		}
+		public List<Query> CachedQueries { get; set; } = new List<Query>();
+		public List<Query> AssociateQueries { get; set; } = new List<Query>();
+
+		public IDbCommand DbCommand { get; set; }
+
+		public string cmds => string.Join("\r\n", AssociateQueries.Select(q => q.CommandText));
+
 	}
 }
