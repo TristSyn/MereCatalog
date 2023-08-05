@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
+using System.Linq;
 
 namespace MereCatalog {
 	/// <summary>
@@ -19,7 +20,7 @@ namespace MereCatalog {
 			ConnectionString = connectionString;
 		}
 
-		protected override IDbCommand CommandNew() { return new SqlCommand(); }
+		protected override IDbCommand CommandNew(string cmdText = "") { return new SqlCommand(cmdText); }
 
 		protected override IDbConnection ConnectionNew() { return new SqlConnection(ConnectionString); }
 
@@ -28,7 +29,14 @@ namespace MereCatalog {
 		public ResultSet<T[]> LoadFromSP<T>(string sp, List<Type> types, bool eagerLoad, params object[] parameters) where T : class {
 
 			Catalogable p = Catalogable.For(typeof(T));
-			IDbCommand cmd = findallcmd(p, CommandType.StoredProcedure, ParameterList(parameters));
+			IDbCommand cmd = CommandNew();
+			cmd.CommandType = CommandType.StoredProcedure;
+			if (parameters != null && parameters.Length > 0)
+			{
+				var parameterList = ParameterList(parameters);
+				for (int i = 0; i < parameterList.Length; i++)
+					cmd.Parameters.Add(ParameterNew(parameterList[i].ParameterName, parameterList[i].Value));
+			}
 			cmd.CommandText = sp;
 			return Load<T>(types, cmd, eagerLoad);
 		}

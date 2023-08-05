@@ -18,17 +18,22 @@ namespace MereCatalog
 		//TODO: caching of the queryset - would need to parameterise the where clause and likely move the queries over to JOIN style rather than subqueries.
 		public override T[] Find<T>(bool eagerLoad, params object[] parameters)
 		{
+			int maxRecursion = 5;
 			Catalogable p = Catalogable.For(typeof(T));
 			IDbDataParameter[] pl = ParameterList(parameters);
-			IDbCommand cmd = findallcmd(p, CommandType.Text, pl);
-			var whereClauseCmd = whereClause(p, pl);
+
+			IDbCommand cmd = CommandNew();
+			string selectCmd = string.Format("SELECT {0} ", string.Join(", ", p.Columns.Select(c => string.Format("p{0}.[{1}]", maxRecursion+1, c.Name)))); 
+			string fromCmd = string.Format("FROM [{0}] p{1} ", p.TableName, maxRecursion+1);
+			string whereClauseCmd = WhereClause(cmd, maxRecursion + 1, p, pl);
+			cmd.CommandText = selectCmd + fromCmd + whereClauseCmd;
 
 			QuerySet querySet = new QuerySet(p, cmd);
 			ResultSet<T[]> result;
 
 			//iterate through associateds, adding queries as we go
 			if (eagerLoad) {
-				BuildOut(querySet, p, whereClauseCmd.CommandText, string.Empty);
+				BuildOut(querySet, p, fromCmd, whereClauseCmd, string.Empty, maxRecursion);
 				var types = CompleteQuerySetCmd(querySet, cmd);
 				result = Load<T>(types, cmd, false);
 			} else
@@ -53,7 +58,7 @@ namespace MereCatalog
 			return types;
 		}
 
-		private void BuildOut(QuerySet querySet, Catalogable p, string whereCmdText, string keyIgnoreRecursion, int maxRecursion = 5)
+		private void BuildOut(QuerySet querySet, Catalogable p, string fromCmd, string whereCmdText, string keyIgnoreRecursion, int maxRecursion)
 		{
 			if (maxRecursion == 0)
 				return;
@@ -73,7 +78,7 @@ namespace MereCatalog
 
 					string whereText = string.Format("SELECT {0} FROM [{1}];\r\n", pt.IDProperty.Name, pt.TableName);
 
-					BuildOut(querySet, pt, whereText, string.Empty, maxRecursion-1);
+					BuildOut(querySet, pt, fromCmd, whereText, string.Empty, maxRecursion-1);
 				} else {
 					/* either	single property		select ... from assoctable where id in (select assoctableid from parenttable where ...)
 					 * or		array property		select ... from assoctable where parenttableid in (select id from parenttable where ...)
@@ -83,21 +88,12 @@ namespace MereCatalog
 					string parentTableKeyID = tEx.IsListOrArray ? p.IDProperty.Name : (p.HasPropertyAttribute(property) ? p.PropertyAttribute(property).KeyID : pt.Reference);
 
 					if (string.IsNullOrEmpty(keyIgnoreRecursion) || keyIgnoreRecursion != parentTableKeyID) {
-
-						string newWhereCmdText = string.Format(" WHERE {0} IN (SELECT {1} FROM [{2}] {3})"
-							, assocTableKeyID
-							, parentTableKeyID
-							, p.TableName
-							, whereCmdText);
-
-						string cmdText = string.Format("SELECT {0} FROM [{1}] {2} {3};\r\n"
-							, string.Join(", ", pt.Columns.Select(c => "[" + c.Name + "]"))
-							, pt.TableName
-							, assocTableKeyID
-							, newWhereCmdText);
-
+						string newFromCmd = fromCmd + string.Format("\r\n\tJOIN [{0}] p{1} ON p{1}.[{2}] = p{3}.[{4}] ", pt.TableName, maxRecursion, assocTableKeyID, maxRecursion + 1, parentTableKeyID);
+						string cmdText = string.Format("SELECT {0} {1} {2}\r\n"
+							, string.Join(", ", pt.Columns.Select(c => string.Format("p{0}.[{1}]", maxRecursion, c.Name)))
+							, newFromCmd, whereCmdText);
 						querySet.AssociateQueries.Add(new Query(pt, cmdText));
-						BuildOut(querySet, pt, newWhereCmdText, tEx.IsListOrArray ? assocTableKeyID : string.Empty, maxRecursion - 1);
+						BuildOut(querySet, pt, newFromCmd, whereCmdText, tEx.IsListOrArray ? assocTableKeyID : string.Empty, maxRecursion - 1);
 					}
 				}
 			}
@@ -106,14 +102,14 @@ namespace MereCatalog
 		public override void Save(object target, bool isNew) {
 			Catalogable schema = Catalogable.For(target);
 			if (isNew) {
-				object id = ExecuteScalar(insertcmd(schema, target));
+				object id = ExecuteScalar(Insertcmd(schema, target));
 				schema.IDProperty.SetValue(target, Convert.ChangeType(id, schema.IDProperty.PropertyType), null);
 			} else
-				ExecuteNonQuery(savecmd(schema, target));
+				ExecuteNonQuery(Savecmd(schema, target));
 		}
 
 		public override void Delete(object target) {
-			ExecuteNonQuery(deletecmd(target));
+			ExecuteNonQuery(Deletecmd(target));
 		}
 
 		#endregion CRUD
@@ -122,7 +118,7 @@ namespace MereCatalog
 
 		#region abstract methods
 
-		protected abstract IDbCommand CommandNew();
+		protected abstract IDbCommand CommandNew(string cmdText = "");
 		protected abstract IDbConnection ConnectionNew();
 
 		public abstract IDbDataParameter ParameterNew(string name, object value);
@@ -246,7 +242,7 @@ namespace MereCatalog
 
 		#region CRUD Commands
 
-		protected virtual IDbCommand deletecmd(object item) {
+		protected virtual IDbCommand Deletecmd(object item) {
 			Catalogable schema = Catalogable.For(item);
 			IDbCommand cmd = CommandNew();
 			string qry = string.Format("DELETE FROM {0} WHERE {1}=@{2}", schema.TableName, schema.IDProperty.Name, schema.IDProperty.Name);
@@ -255,43 +251,21 @@ namespace MereCatalog
 			return cmd;
 		}
 
-		protected virtual IDbCommand whereClause(Catalogable schema, params IDbDataParameter[] parameters) {
-			IDbCommand cmd = CommandNew();
+		protected string WhereClause(IDbCommand cmd, int tableIndex, Catalogable schema, params IDbDataParameter[] parameters) {
 			if (parameters == null || parameters.Length == 0)
-				return cmd;
+				return string.Empty;
 			string paramqry = " WHERE ";
 			for (int i = 0; i < parameters.Length; i++) {
 				if (schema.Columns.Any(p => p.Name == parameters[i].ParameterName)) {
-					paramqry += string.Format("{0} = @{1} {2}", parameters[i].ParameterName, "p" + i.ToString(), i < parameters.Length - 1 ? " AND " : "");
+					paramqry += string.Format("p{0}.{1} = @{2} {3}", tableIndex, parameters[i].ParameterName, "p" + i.ToString(), i < parameters.Length - 1 ? " AND " : "");
 					cmd.Parameters.Add(ParameterNew("p" + i.ToString(), parameters[i].Value));
 				} else
 					throw new Exception("Parameter not found : " + parameters[i].ParameterName);
 			}
-			cmd.CommandText = paramqry;
-			return cmd;
+			return paramqry+";\r\n";
 		}
 
-		protected virtual IDbCommand findallcmd(Catalogable schema, CommandType cmdType, params IDbDataParameter[] parameters) {
-			IDbCommand cmd = CommandNew();
-			cmd.CommandType = cmdType;
-			switch (cmdType) {
-				case CommandType.Text:
-					cmd = schema.Cached ? CommandNew() : whereClause(schema, parameters);
-					cmd.CommandType = cmdType;
-					cmd.CommandText = string.Format("SELECT {0} FROM [{1}] {2};\r\n", string.Join(", ", schema.Columns.Select(c => "["+c.Name+"]")), schema.TableName, cmd.CommandText); //cmd.CommandText will be empty for schema.Cached
-					break;
-					// SPs may not be available in all SQLs - should be moved to SQLServer.
-				case CommandType.StoredProcedure:
-					if (parameters != null && parameters.Length > 0) {
-						for (int i = 0; i < parameters.Length; i++)
-							cmd.Parameters.Add(ParameterNew(parameters[i].ParameterName, parameters[i].Value));
-					}
-					break;
-			}
-			return cmd;
-		}
-
-		protected virtual IDbCommand insertcmd(Catalogable schema, object item) {
+		protected virtual IDbCommand Insertcmd(Catalogable schema, object item) {
 			IDbCommand cmd = CommandNew();
 			string fieldnames = string.Empty, paramnames = string.Empty;
 			foreach (var col in schema.Columns.Where(col => col.Name != schema.IDProperty.Name)) {
@@ -303,7 +277,7 @@ namespace MereCatalog
 			return cmd;
 		}
 
-		protected virtual IDbCommand savecmd(Catalogable schema, object item) {
+		protected virtual IDbCommand Savecmd(Catalogable schema, object item) {
 			IDbCommand cmd = CommandNew();
 			string fields = "";
 			foreach (var col in schema.Columns.Where(col => col.Name != schema.IDProperty.Name)) {
@@ -337,8 +311,5 @@ namespace MereCatalog
 		public List<Query> AssociateQueries { get; set; } = new List<Query>();
 
 		public IDbCommand DbCommand { get; set; }
-
-		public string cmds => string.Join("\r\n", AssociateQueries.Select(q => q.CommandText));
-
 	}
 }
