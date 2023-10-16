@@ -83,14 +83,16 @@ namespace MereCatalog
         public IEnumerable<PropertyInfo> Associated {
             get
             {
-                if (associated == null)
-                    associated = 
-                        All.Where(p => 
-                                    !p.PropertyType.IsPrimitive 
-									&& !AllowedNonPrimitives.Contains(p.PropertyType)
-									&& !(HasPropertyAttribute(p) && PropertyAttribute(p).Exclude)
-									//&& (!HasPropertyAttribute(p) || !PropertyAttribute(p).Exclude)
-                                );
+				if (associated == null)
+					associated =
+						All.Where(p =>
+							!p.PropertyType.IsPrimitive
+							&& !IsAllowedNullable(p.PropertyType) //nullable primitives
+							//&& !(p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Nullable<>) && Nullable.GetUnderlyingType(p.PropertyType).IsPrimitive) 
+							&& !AllowedNonPrimitives.Contains(p.PropertyType)
+							&& !(HasPropertyAttribute(p) && PropertyAttribute(p).Exclude)
+							//&& (!HasPropertyAttribute(p) || !PropertyAttribute(p).Exclude)
+                        );
                 return associated;
             }
         }

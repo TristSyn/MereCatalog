@@ -5,6 +5,8 @@ using System.Data;
 using System.Data.Common;
 using System.Reflection;
 using System.Collections;
+using System.Data.SqlClient;
+using System.Collections.ObjectModel;
 
 namespace MereCatalog
 {
@@ -13,7 +15,19 @@ namespace MereCatalog
 	/// </summary>
 	public abstract class MereCatalogerSQL : MereCataloger {
 
+
+		//public string ConnectionStringName { get; private set; }
+		public static readonly string CONNECTION_STRING_NAME = "MereCatalogSQLServer_ConnectionString";
+		public string ConnectionString { get; private set; }
+		public IDbConnection Connection { get; private set; }	
+
+		public MereCatalogerSQL(string connectionString) { ConnectionString = connectionString; }
+
+		public MereCatalogerSQL(IDbConnection dbConnection) { Connection = dbConnection; }
+
 		#region CRUD
+		QuerySet querySet{ get; set; }
+		//List<Type> types{ get; set; }
 
 		//TODO: caching of the queryset - would need to parameterise the where clause and likely move the queries over to JOIN style rather than subqueries.
 		public override T[] Find<T>(bool eagerLoad, params object[] parameters)
@@ -22,23 +36,27 @@ namespace MereCatalog
 			Catalogable p = Catalogable.For(typeof(T));
 			IDbDataParameter[] pl = ParameterList(parameters);
 
-			IDbCommand cmd = CommandNew();
-			string selectCmd = string.Format("SELECT {0} ", string.Join(", ", p.Columns.Select(c => string.Format("p{0}.[{1}]", maxRecursion+1, c.Name)))); 
-			string fromCmd = string.Format("FROM [{0}] p{1} ", p.TableName, maxRecursion+1);
-			string whereClauseCmd = WhereClause(cmd, maxRecursion + 1, p, pl);
-			cmd.CommandText = selectCmd + fromCmd + whereClauseCmd;
+			if (querySet == null) {
+				IDbCommand cmd = CommandNew();
+				string selectCmd = string.Format("SELECT {0} ", string.Join(", ", p.Columns.Select(c => string.Format("p{0}.[{1}]", maxRecursion + 1, c.Name))));
+				string fromCmd = string.Format("FROM [{0}] p{1} ", p.TableName, maxRecursion + 1);
+				string whereClauseCmd = WhereClause(cmd, maxRecursion + 1, p, pl);
+				querySet = new QuerySet(p, cmd, selectCmd + fromCmd + whereClauseCmd);
+				if (eagerLoad)
+				{
+					BuildOut(querySet, p, fromCmd, whereClauseCmd, string.Empty, maxRecursion);
+				} //else 
+				  //	types = new List<Type>{ typeof(T) };
+				//types = CompleteQuerySetCmd(querySet, cmd);
+			}
 
-			QuerySet querySet = new QuerySet(p, cmd);
-			ResultSet<T[]> result;
+			IDbCommand cmdNew = CommandNew();
+			List<Type> typesNew = querySet.BuildCmd(cmdNew);
 
-			//iterate through associateds, adding queries as we go
-			if (eagerLoad) {
-				BuildOut(querySet, p, fromCmd, whereClauseCmd, string.Empty, maxRecursion);
-				var types = CompleteQuerySetCmd(querySet, cmd);
-				result = Load<T>(types, cmd, false);
-			} else
-				result = Load<T>(new List<Type> { typeof(T) }, cmd, false);
+			//return new T[] { Activator.CreateInstance(p.Type) as T };
+			ResultSet<T[]> result = Load<T>(typesNew, cmdNew, false);
 			return result?.Result;
+
 		}
 
 		List<Type> CompleteQuerySetCmd(QuerySet querySet, IDbCommand cmd)
@@ -136,14 +154,23 @@ namespace MereCatalog
 		}
 
 		protected object Execute(IDbCommand cmd, Func<object> t) {
-			object result = null;
-			using (IDbConnection connection = ConnectionNew()) {
-				cmd.Connection = connection;
-				connection.Open();
-				result = t();
-				connection.Close();
+			if (Connection != null)
+				return Execute(Connection, cmd, t);
+			else
+			{
+				using (IDbConnection connection = ConnectionNew())
+				{
+					return Execute(connection, cmd, t);
+				}	
 			}
-			return result;
+		}
+
+		protected object Execute(IDbConnection connection, IDbCommand cmd, Func<object> t)
+		{
+			cmd.Connection = Connection;
+			if(Connection.State != ConnectionState.Open)
+				Connection.Open();
+			return t();
 		}
 
 		#endregion executes
@@ -159,43 +186,58 @@ namespace MereCatalog
 		/// <param name="eagerLoad">Dictates whether to manually attempt to load missing results expected during wiring up the "associated properties</param>
 		/// <returns></returns>
 		protected ResultSet<T[]> Load<T>(List<Type> types, IDbCommand cmd, bool eagerLoad) where T : class {
+
 			if (typeof(T) != types[0])
 				throw new Exception("First Type does not match Generic Type");
-			ResultSet<T[]> rs = null;
-			//try 
-			{
-				using (IDbConnection connection = ConnectionNew()) {
-
-					cmd.Connection = connection;
+			if (Connection != null) {
+				return Load<T>(Connection, types, cmd, eagerLoad);
+			} else {
+				using (IDbConnection connection = ConnectionNew())
+				{
 					connection.Open();
-
-					DbDataReader reader = (DbDataReader)cmd.ExecuteReader();
-					int i = 0;
-					int typeCount = types.Count();
-					while (reader.HasRows && i < typeCount) {
-						try {
-							Catalogable pt = Catalogable.For(types[i]);
-							ArrayList results = new ArrayList();
-							while (reader.Read()) {
-								object obj = Activator.CreateInstance(pt.Type);
-								InstantiateProperties(pt, obj, s => reader[s]);
-								results.Add(obj);
-							}
-							if (pt.Cached && pt.Cache == null)
-								pt.Cache = results.ToArray(); //check if it's cacheable and add if not already cached
-							if (rs == null)
-								rs = new ResultSet<T[]>((T[])results.ToArray(pt.Type));
-							else
-								rs.Add(results.ToArray(pt.Type));
-							reader.NextResult();
-						} catch (Exception ex) { } //no error handling for now
-						i++;
-					}
-					connection.Close();
+					return Load<T>(connection, types, cmd, eagerLoad);
 				}
-				rs?.ProcessQueue(this, eagerLoad);
-			} //catch (Exception ex) { }
+			}
+		}
 
+		protected ResultSet<T[]> Load<T>(IDbConnection connection, List<Type> types, IDbCommand cmd, bool eagerLoad) where T : class
+		{
+			ResultSet<T[]> rs = null;
+
+			cmd.Connection = connection;
+
+			if (connection.State != ConnectionState.Open)
+				connection.Open();
+			using (DbDataReader reader = (DbDataReader)cmd.ExecuteReader())
+			{
+				int i = 0;
+				int typeCount = types.Count();
+				while (reader.HasRows && i < typeCount)
+				{
+					try
+					{
+						Catalogable pt = Catalogable.For(types[i]);
+						ArrayList results = new ArrayList();
+						while (reader.Read())
+						{
+							object obj = Activator.CreateInstance(pt.Type);
+							InstantiateProperties(pt, obj, s => reader[s]);
+							results.Add(obj);
+						}
+						if (pt.Cached && pt.Cache == null)
+							pt.Cache = results.ToArray(); //check if it's cacheable and add if not already cached
+						if (rs == null)
+							rs = new ResultSet<T[]>((T[])results.ToArray(pt.Type));
+						else
+							rs.Add(results.ToArray(pt.Type));
+						reader.NextResult();
+					}
+					catch (Exception ex) { } //no error handling for now
+					i++;
+				}
+			}
+			//return rs;
+			rs?.ProcessQueue(this, eagerLoad);
 			return rs;
 		}
 
@@ -303,13 +345,42 @@ namespace MereCatalog
 
 	internal class QuerySet {
 		public Catalogable Type { get; set; }
-		public QuerySet(Catalogable p, IDbCommand cmd) {
+		public string BaseQuery { get; set; }
+		public QuerySet(Catalogable p, IDbCommand cmd, string baseQuery) {
 			Type = p;
 			DbCommand = cmd;
+			BaseQuery = baseQuery;
 		}
 		public List<Query> CachedQueries { get; set; } = new List<Query>();
 		public List<Query> AssociateQueries { get; set; } = new List<Query>();
 
 		public IDbCommand DbCommand { get; set; }
+
+		public List<Type> BuildCmd(IDbCommand cmd)
+		{
+			foreach(IDbDataParameter parameter in  DbCommand.Parameters) {
+				var pp = new SqlParameter(parameter.ParameterName, parameter.Value);
+				cmd.Parameters.Add( pp); 
+			}
+			cmd.CommandType = DbCommand.CommandType;
+			cmd.CommandText = BaseQuery;
+
+			List<Type> types = new List<Type> { Type.Type };
+			foreach (var cq in CachedQueries)
+			{
+				if (cq.Type.Cache == null)
+				{
+					cmd.CommandText += cq.CommandText;
+					types.Add(cq.Type.Type);
+				}
+			}
+			foreach (var q in AssociateQueries)
+			{
+				cmd.CommandText += q.CommandText;
+				types.Add(q.Type.Type);
+			}
+
+			return types;
+		}
 	}
 }

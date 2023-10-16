@@ -11,14 +11,9 @@ namespace MereCatalog {
 	/// Adds the ability to return a ResultSet from a stored procedure.
 	/// </summary>
 	public class MereCatalogerSQLServer : MereCatalogerSQL {
-		//public string ConnectionStringName { get; private set; }
-		public static readonly string CONNECTION_STRING_NAME = "MereCatalogSQLServer_ConnectionString";
-		public string ConnectionString { get; private set; }
 
-		public MereCatalogerSQLServer(string connectionString)
-		{
-			ConnectionString = connectionString;
-		}
+		public MereCatalogerSQLServer(string connectionString) : base(connectionString) { }
+		public MereCatalogerSQLServer(IDbConnection dbConnection) : base(dbConnection) { }
 
 		protected override IDbCommand CommandNew(string cmdText = "") { return new SqlCommand(cmdText); }
 

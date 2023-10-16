@@ -67,15 +67,18 @@ namespace MereCatalog
 		/// <param name="eagerLoad">Dictates whether to manually attempt to load missing results expected during wiring up the "associated properties</param>
 		private void InstantiateAssociated(MereCataloger p, object item, bool eagerLoad) {
 			Catalogable t = Catalogable.For(item);
-            object itemID = t.ID(item);
+			if (!t.Associated.Any())
+				return;
 
-            foreach (PropertyInfo property in t.Associated) {
+			object itemID = t.ID(item);
+
+			foreach (PropertyInfo property in t.Associated) {
 				TypeEx tEx = property.TypeEx();
 				if (property.GetValue(item, null) != null)
-                    continue;
+					continue;
 				Catalogable pt = Catalogable.For(tEx.ElementType);
-                if (tEx.IsListOrArray) {
-                    object[] result = null;
+				if (tEx.IsListOrArray) {
+					object[] result = null;
 					string KeyID = t.HasPropertyAttribute(property) ? t.PropertyAttribute(property).KeyID : t.Reference;
 
 					if (pt.Cached && pt.Cache != null) {
@@ -93,24 +96,24 @@ namespace MereCatalog
 							Add(result);
 						}
 					}
-                    if (result != null) {
-                        if (tEx.IsArray) {
-                            Array array = Array.CreateInstance(tEx.ElementType, result.Count());
-                            Array.Copy(result, array, result.Length);
-                            property.SetValue(item, array, null);
-                        } else {
-                            IList list = (IList)Activator.CreateInstance(property.PropertyType);
-                            foreach (object o in (object[])result)
-                                list.Add(o);
-                            property.SetValue(item, list, null);
-                        }
-                    }
-                } else { //singular objects
-                    object result = null;
+					if (result != null) {
+						if (tEx.IsArray) {
+							Array array = Array.CreateInstance(tEx.ElementType, result.Count());
+							Array.Copy(result, array, result.Length);
+							property.SetValue(item, array, null);
+						} else {
+							IList list = (IList)Activator.CreateInstance(property.PropertyType);
+							foreach (object o in (object[])result)
+								list.Add(o);
+							property.SetValue(item, list, null);
+						}
+					}
+				} else { //singular objects
+					object result = null;
 					if (pt.IDProperty == null) //possibly because it's not been "excluded"
 						continue;
-                    string KeyID = t.HasPropertyAttribute(property) ? t.PropertyAttribute(property).KeyID : pt.Reference;
-                    object id = t.ColumnValue(item, KeyID);
+					string KeyID = t.HasPropertyAttribute(property) ? t.PropertyAttribute(property).KeyID : pt.Reference;
+					object id = t.ColumnValue(item, KeyID);
 					//if in the results then use, else load in using Find method on the relatedBusinessObject
 					if (pt.Cached && pt.Cache != null)
 						result = pt.Cache.FirstOrDefault(o => pt.ID(o).Equals(id));
@@ -125,10 +128,10 @@ namespace MereCatalog
 							}
 						}
 					}
-                    if (result != null)
-                        property.SetValue(item, result, null);
-                }
-            }
-        }
+					if (result != null)
+						property.SetValue(item, result, null);
+				}
+			}
+		}
 	}
 }
